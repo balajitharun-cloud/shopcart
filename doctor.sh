@@ -51,6 +51,15 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 
+# 4a. Codespaces hints - the forwarded port must be PUBLIC to be reachable from the Pages site
+if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}" ]; then
+  echo
+  info "Codespaces detected."
+  info "  public URL: https://${CODESPACE_NAME}-${PORT}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+  info "  if a browser shows 'Connecting to the forwarded port', make the port public with:"
+  info "    gh codespace ports visibility ${PORT}:public"
+fi
+
 # 4. Is the port free - or is ShopCart already running on it?
 if (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null; then
   exec 3>&- 2>/dev/null
