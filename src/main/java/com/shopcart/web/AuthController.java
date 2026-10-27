@@ -5,6 +5,7 @@ import com.shopcart.dto.Dtos;
 import com.shopcart.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +38,12 @@ public class AuthController {
         String header = request.getHeader("Authorization");
         authService.logout(header == null ? null : header.replace("Bearer", "").trim());
         return new Dtos.MessageResponse("Logged out");
+    }
+
+    /** Account closure - password re-confirmed in the body. */
+    @DeleteMapping("/account")
+    public Dtos.MessageResponse deleteAccount(@Valid @RequestBody Dtos.DeleteAccountRequest request) {
+        return authService.deleteAccount(AuthContext.require(), request.password());
     }
 
     @GetMapping("/me")

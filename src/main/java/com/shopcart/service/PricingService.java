@@ -62,7 +62,8 @@ public class PricingService {
                     .multiply(BigDecimal.valueOf(item.getQuantity()))
                     .setScale(2, RoundingMode.HALF_UP);
             subtotal = subtotal.add(lineTotal);
-            lines.add(new Dtos.CartLine(product.getId(), product.getName(), product.getImage(),
+            lines.add(new Dtos.CartLine(product.getId(), product.getName(),
+                    product.getBrand() == null ? "ShopCart" : product.getBrand(), product.getImage(),
                     product.getPrice(), item.getQuantity(), product.getStock(), lineTotal));
         }
 

@@ -33,11 +33,13 @@ public final class Dtos {
 
     public record CategoryView(Long id, String name, String slug) { }
 
-    public record ProductView(Long id, String name, String description, BigDecimal price,
-                              int stock, String category, String image, boolean active) { }
+    public record ProductView(Long id, String name, String brand, String description, BigDecimal price,
+                              BigDecimal mrp, int stock, String category, String image, boolean active,
+                              double rating, int reviewCount) { }
 
-    public record ProductRequest(String name, String description, BigDecimal price,
-                                 Integer stock, Long categoryId, String image, Boolean active) { }
+    public record ProductRequest(String name, String brand, String description, BigDecimal price,
+                                 BigDecimal mrp, Integer stock, Long categoryId, String image,
+                                 Boolean active, Double rating, Integer reviewCount) { }
 
     // ---------- cart and billing (Algorithms D, E, F) ----------
 
@@ -47,7 +49,7 @@ public final class Dtos {
 
     public record CouponRequest(String couponCode) { }
 
-    public record CartLine(Long productId, String name, String image, BigDecimal price,
+    public record CartLine(Long productId, String name, String brand, String image, BigDecimal price,
                            int quantity, int stock, BigDecimal subtotal) { }
 
     public record BillView(List<CartLine> lines, int itemCount, BigDecimal subtotal, BigDecimal tax,
@@ -84,4 +86,6 @@ public final class Dtos {
                              List<ProductView> lowStockProducts, List<OrderView> recentOrders) { }
 
     public record MessageResponse(String message) { }
+
+    public record DeleteAccountRequest(@NotBlank(message = "is required") String password) { }
 }

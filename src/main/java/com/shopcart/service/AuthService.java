@@ -2,9 +2,14 @@ package com.shopcart.service;
 
 import com.shopcart.config.AppException;
 import com.shopcart.dto.Dtos;
+import com.shopcart.model.Order;
 import com.shopcart.model.Role;
 import com.shopcart.model.SessionToken;
 import com.shopcart.model.User;
+import com.shopcart.repo.CartItemRepository;
+import com.shopcart.repo.OrderEventRepository;
+import com.shopcart.repo.OrderRepository;
+import com.shopcart.repo.PaymentRepository;
 import com.shopcart.repo.SessionTokenRepository;
 import com.shopcart.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +32,10 @@ public class AuthService {
     private final UserRepository users;
     private final SessionTokenRepository sessions;
     private final PasswordEncoder passwordEncoder;
+    private final CartItemRepository cartItems;
+    private final OrderRepository orders;
+    private final OrderEventRepository orderEvents;
+    private final PaymentRepository payments;
 
     @Value("${app.auth.max-login-attempts:3}")
     private int maxLoginAttempts;
@@ -37,10 +46,16 @@ public class AuthService {
     @Value("${app.auth.session-hours:24}")
     private int sessionHours;
 
-    public AuthService(UserRepository users, SessionTokenRepository sessions, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository users, SessionTokenRepository sessions, PasswordEncoder passwordEncoder,
+                       CartItemRepository cartItems, OrderRepository orders,
+                       OrderEventRepository orderEvents, PaymentRepository payments) {
         this.users = users;
         this.sessions = sessions;
         this.passwordEncoder = passwordEncoder;
+        this.cartItems = cartItems;
+        this.orders = orders;
+        this.orderEvents = orderEvents;
+        this.payments = payments;
     }
 
     /** Algorithm B. */
@@ -140,6 +155,37 @@ public class AuthService {
                 .filter(s -> s.getExpiresAt().isAfter(LocalDateTime.now()))
                 .flatMap(s -> users.findById(s.getUserId()))
                 .orElse(null);
+    }
+
+    /**
+     * Closes the account for good: cart, sessions, orders, payments and the user row.
+     *
+     * <p>The password is required again - deleting an account is irreversible and a borrowed
+     * unlocked browser should not be enough. The last remaining admin cannot be removed, otherwise
+     * nobody could administer the store.</p>
+     */
+    @Transactional
+    public Dtos.MessageResponse deleteAccount(User user, String password) {
+        if (password == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new AppException(403, "That password does not match. Account was not deleted.");
+        }
+        if (user.getRole() == Role.ADMIN
+                && users.findAll().stream().filter(u -> u.getRole() == Role.ADMIN).count() <= 1) {
+            throw new AppException(409, "This is the only admin account, so it cannot be deleted.");
+        }
+
+        java.util.List<Order> owned = orders.findByUserId(user.getId());
+        java.util.List<Long> orderIds = owned.stream().map(Order::getId).toList();
+        if (!orderIds.isEmpty()) {
+            orderEvents.deleteByOrderIdIn(orderIds);
+            payments.deleteByOrderIdIn(orderIds);
+            orders.deleteAll(owned); // order items cascade with the order
+        }
+        cartItems.deleteByUserId(user.getId());
+        sessions.deleteByUserId(user.getId());
+        users.delete(user);
+
+        return new Dtos.MessageResponse("Your account and its data have been deleted.");
     }
 
     @Transactional

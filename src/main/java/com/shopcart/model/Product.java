@@ -24,6 +24,19 @@ public class Product {
     @Column(nullable = false)
     private String name;
 
+    /** House brand - fictional, see the note in DataSeeder. */
+    private String brand;
+
+    /** List price (MRP) used to show the strike-through and the discount badge. */
+    @Column(precision = 12, scale = 2)
+    private BigDecimal mrp;
+
+    @Column(nullable = false)
+    private double rating;
+
+    @Column(nullable = false)
+    private int reviewCount;
+
     @Column(length = 1000)
     private String description;
 
@@ -37,7 +50,7 @@ public class Product {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    /** Simple emoji/asset key used by the UI card. */
+    /** Artwork key resolved to an inline SVG by the storefront (e.g. "headphones"). */
     private String image;
 
     @Column(nullable = false)
@@ -48,6 +61,18 @@ public class Product {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getBrand() { return brand; }
+    public void setBrand(String brand) { this.brand = brand; }
+
+    public BigDecimal getMrp() { return mrp; }
+    public void setMrp(BigDecimal mrp) { this.mrp = mrp; }
+
+    public double getRating() { return rating; }
+    public void setRating(double rating) { this.rating = rating; }
+
+    public int getReviewCount() { return reviewCount; }
+    public void setReviewCount(int reviewCount) { this.reviewCount = reviewCount; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

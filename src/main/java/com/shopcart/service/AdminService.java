@@ -124,11 +124,18 @@ public class AdminService {
             throw new AppException(400, "Stock must be zero or more");
         }
         product.setName(request.name().trim());
+        product.setBrand(request.brand() == null || request.brand().isBlank()
+                ? "ShopCart" : request.brand().trim());
         product.setDescription(request.description() == null ? "" : request.description().trim());
         product.setPrice(request.price().setScale(2, java.math.RoundingMode.HALF_UP));
+        product.setMrp(request.mrp() == null || request.mrp().compareTo(request.price()) < 0
+                ? request.price().setScale(2, java.math.RoundingMode.HALF_UP)
+                : request.mrp().setScale(2, java.math.RoundingMode.HALF_UP));
         product.setStock(request.stock());
-        product.setImage(request.image() == null ? "📦" : request.image());
+        product.setImage(request.image() == null || request.image().isBlank() ? "package" : request.image());
         product.setActive(request.active() == null || request.active());
+        product.setRating(request.rating() == null ? 0d : Math.max(0d, Math.min(5d, request.rating())));
+        product.setReviewCount(request.reviewCount() == null ? 0 : Math.max(0, request.reviewCount()));
         if (request.categoryId() != null) {
             Category category = categories.findById(request.categoryId())
                     .orElseThrow(() -> new AppException(400, "Category not found"));

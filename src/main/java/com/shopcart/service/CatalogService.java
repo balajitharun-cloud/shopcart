@@ -61,9 +61,10 @@ public class CatalogService {
     }
 
     public Dtos.ProductView toView(Product product) {
-        return new Dtos.ProductView(product.getId(), product.getName(), product.getDescription(),
-                product.getPrice(), product.getStock(),
+        return new Dtos.ProductView(product.getId(), product.getName(),
+                product.getBrand() == null ? "ShopCart" : product.getBrand(),
+                product.getDescription(), product.getPrice(), product.getMrp(), product.getStock(),
                 product.getCategory() == null ? "Uncategorised" : product.getCategory().getName(),
-                product.getImage(), product.isActive());
+                product.getImage(), product.isActive(), product.getRating(), product.getReviewCount());
     }
 }

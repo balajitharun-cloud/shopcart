@@ -1,47 +1,48 @@
-/* ShopCart frontend - vanilla JS, talks to the Spring Boot REST API. */
+/* ShopCart storefront. Talks to the Spring Boot API; API host comes from config.js. */
 
-const STATUS_FLOW = ["PLACED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"];
-
-/* The storefront is also published as a static site (GitHub Pages), so the API host comes
-   from docs/config.js instead of being hardcoded. Empty = same origin (Spring Boot serves it). */
 const CONFIG = window.SHOPCART_CONFIG || {};
-
-/* API host resolution, highest priority first:
-   1. ?api=https://host      (try a backend without editing anything)
-   2. localStorage "shopcart.apiBase"  (set by the "Connect backend" box)
-   3. docs/config.js apiBase (the value baked into the deploy)
-   4. same origin (Spring Boot is serving this page) */
 const API_OVERRIDE =
   new URLSearchParams(location.search).get("api") ||
   localStorage.getItem("shopcart.apiBase") ||
   "";
-/* An explicit choice (?api= or the connect box) must beat the value baked into config.js,
-   otherwise the box would look like it does nothing. */
+/* An explicit choice (?api= or the connect box) must beat the value baked into config.js. */
 const API_BASE = String(API_OVERRIDE || CONFIG.apiBase || "").replace(/\/+$/, "");
-/* True when this page is served by a static host (GitHub Pages) rather than by Spring Boot. */
 const STATIC_HOST = CONFIG.staticHost === true;
-const PAY_LABELS = { CARD: "Card", UPI: "UPI", NET_BANKING: "Net Banking", COD: "Cash on Delivery" };
+
+const STATUS_FLOW = ["PLACED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"];
+const PAY_LABELS = { CARD: "Card", UPI: "UPI", NET_BANKING: "Net banking", COD: "Cash on delivery" };
 
 const state = {
   token: localStorage.getItem("shopcart.token") || null,
   user: JSON.parse(localStorage.getItem("shopcart.user") || "null"),
   categories: [],
+  products: [],
   category: "all",
   query: "",
+  sort: "featured",
   bill: null,
   couponCode: null,
-  pendingAdd: null,
-  adminTab: "reports",
+  pending: null,
+  adminTab: "overview",
   editingProduct: null,
 };
 
 const $ = (id) => document.getElementById(id);
-const money = (value) =>
-  "₹" + Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value) => {
+  const n = Number(value || 0);
+  const hasPaise = Math.round(Math.abs(n) * 100) % 100 !== 0;
+  return "₹" + n.toLocaleString("en-IN", {
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+};
+const discountPct = (price, mrp) =>
+  mrp && Number(mrp) > Number(price) ? Math.round((1 - Number(price) / Number(mrp)) * 100) : 0;
 const esc = (text) =>
   String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* ------------------------------ API helper ------------------------------ */
+/* ------------------------------ API ------------------------------ */
 
 async function api(path, { method = "GET", body = null, auth = true } = {}) {
   const headers = { "Content-Type": "application/json" };
@@ -56,13 +57,12 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
     });
   } catch (networkError) {
     const codespaceHint = /\.app\.github\.dev\/?$/.test(API_BASE)
-      ? " Note: a GitHub Codespaces URL cannot serve a separate site - GitHub puts a consent page in"
-        + " front of the port and browsers block that for cross-origin requests. Open the codespace URL"
-        + " directly instead (Spring Boot serves the storefront itself), or use a dedicated host."
+      ? " A GitHub Codespaces URL cannot serve a separate site - GitHub puts a consent page in front of"
+        + " the port and browsers block that cross-origin. Open the codespace URL directly instead."
       : "";
     throw new Error(
       API_BASE
-        ? "Cannot reach the API at " + API_BASE + ". Is the backend running and is CORS configured for this origin?" + codespaceHint
+        ? "Cannot reach the API at " + API_BASE + ". Is the backend awake and is CORS configured for this origin?" + codespaceHint
         : "No API configured. Set apiBase in docs/config.js to your deployed ShopCart backend."
     );
   }
@@ -77,10 +77,7 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
   if (!response.ok || !isJson) {
     let fallback;
     if (response.ok && !isJson) {
-      // A 200 that is not JSON is almost always a captive/consent page in front of the API.
-      fallback = "The backend replied with a web page instead of JSON. A GitHub Codespaces URL shows a "
-        + "one-time 'Codespaces Access Port' consent page - open the URL in a tab, accept it, then reload. "
-        + "A dedicated host (Render/Railway) does not do this.";
+      fallback = "The backend replied with a web page instead of JSON - a consent or captive portal is in front of it.";
     } else if (response.status === 404) {
       fallback = "API endpoint not found. Check that apiBase points at the ShopCart backend.";
     } else {
@@ -90,7 +87,7 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
     error.status = response.status;
     if (response.status === 401 && auth && state.token) {
       clearSession();
-      toast("Your session ended. Please log in again.", "error");
+      toast("Your session ended. Please sign in again.", "error");
     }
     throw error;
   }
@@ -102,67 +99,57 @@ function toast(message, kind = "") {
   el.className = "toast " + kind;
   el.textContent = message;
   $("toast-wrap").appendChild(el);
-  setTimeout(() => el.remove(), 3600);
+  setTimeout(() => el.remove(), 3800);
 }
 
 /* ------------------------------ navigation ------------------------------ */
 
-const VIEWS = ["shop", "cart", "checkout", "confirmation", "orders", "admin"];
+const VIEWS = ["shop", "cart", "checkout", "confirmation", "orders", "account", "admin"];
 
 function show(view) {
   VIEWS.forEach((name) => { $("view-" + name).hidden = name !== view; });
-  document.querySelectorAll("[data-nav]").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.nav === view);
-  });
   window.scrollTo({ top: 0, behavior: "smooth" });
-
   if (view === "cart") loadCart();
   if (view === "checkout") loadCheckout();
   if (view === "orders") loadOrders();
+  if (view === "account") loadAccount();
   if (view === "admin") loadAdmin();
 }
 
 document.addEventListener("click", (event) => {
-  const navBtn = event.target.closest("[data-nav]");
-  if (navBtn) {
+  const nav = event.target.closest("[data-nav]");
+  if (nav) {
     event.preventDefault();
-    const target = navBtn.dataset.nav;
-    if (target === "cart" && !state.user) { openAuth("login"); return; }
-    if (target === "orders" && !state.user) { openAuth("login"); return; }
-    if (target === "admin" && !state.user) { openAuth("login"); return; }
+    const target = nav.dataset.nav;
+    if ((target === "cart" || target === "orders" || target === "account") && !state.user) {
+      openAuth("login");
+      return;
+    }
     show(target);
     return;
   }
-  const closeBtn = event.target.closest("[data-close]");
-  if (closeBtn) { $(closeBtn.dataset.close).hidden = true; }
+  if (event.target.closest("[data-scroll-grid]")) {
+    $("product-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const close = event.target.closest("[data-close]");
+  if (close) $(close.dataset.close).hidden = true;
 });
 
-document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
+document.querySelectorAll(".sheet-backdrop").forEach((backdrop) => {
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) backdrop.hidden = true;
   });
 });
 
-/* ------------------------------ auth ------------------------------ */
+/* ------------------------------ session ------------------------------ */
 
-function openAuth(mode = "login") {
-  $("auth-modal").hidden = false;
-  setAuthTab(mode);
+function renderSession() {
+  const signedIn = !!state.user;
+  $("account-label").textContent = signedIn ? state.user.name.split(" ")[0] : "Sign in";
+  $("hero-orders").hidden = !signedIn;
+  if (signedIn) $("cart-count").textContent = $("cart-count").textContent || "0";
 }
-
-function setAuthTab(mode) {
-  document.querySelectorAll("[data-auth]").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.auth === mode);
-  });
-  $("login-form").hidden = mode !== "login";
-  $("register-form").hidden = mode !== "register";
-}
-
-document.querySelectorAll("[data-auth]").forEach((tab) => {
-  tab.addEventListener("click", () => setAuthTab(tab.dataset.auth));
-});
-
-$("auth-btn").addEventListener("click", () => openAuth("login"));
 
 function applySession(payload) {
   state.token = payload.token;
@@ -181,21 +168,33 @@ function clearSession() {
   state.couponCode = null;
   localStorage.removeItem("shopcart.token");
   localStorage.removeItem("shopcart.user");
+  $("cart-count").textContent = "0";
   renderSession();
-  refreshCartCount();
 }
 
-function renderSession() {
-  const loggedIn = !!state.user;
-  $("auth-btn").hidden = loggedIn;
-  $("account-chip").hidden = !loggedIn;
-  $("nav-orders").hidden = !loggedIn;
-  $("nav-admin").hidden = !loggedIn || state.user.role !== "ADMIN";
-  if (loggedIn) {
-    $("account-name").textContent = state.user.name.split(" ")[0];
-    $("account-initial").textContent = state.user.name.charAt(0).toUpperCase();
-  }
+$("account-btn").addEventListener("click", () => {
+  if (state.user) show("account");
+  else openAuth("login");
+});
+
+/* ------------------------------ auth ------------------------------ */
+
+function openAuth(mode = "login") {
+  $("auth-modal").hidden = false;
+  setAuthTab(mode);
 }
+
+function setAuthTab(mode) {
+  document.querySelectorAll("[data-auth]").forEach((tab) => {
+    tab.classList.toggle("is-active", tab.dataset.auth === mode);
+  });
+  $("login-form").hidden = mode !== "login";
+  $("register-form").hidden = mode !== "register";
+}
+
+document.querySelectorAll("[data-auth]").forEach((tab) => {
+  tab.addEventListener("click", () => setAuthTab(tab.dataset.auth));
+});
 
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -206,10 +205,10 @@ $("login-form").addEventListener("submit", async (event) => {
       body: { email: $("login-email").value, password: $("login-password").value },
     });
     applySession(payload);
-    toast("Welcome back, " + payload.user.name.split(" ")[0] + "!", "success");
-    if (state.pendingAdd) {
-      const pending = state.pendingAdd;
-      state.pendingAdd = null;
+    toast("Signed in as " + payload.user.name.split(" ")[0], "success");
+    if (state.pending) {
+      const pending = state.pending;
+      state.pending = null;
       await addToCart(pending.productId, pending.quantity);
     }
   } catch (error) {
@@ -233,76 +232,83 @@ $("register-form").addEventListener("submit", async (event) => {
     });
     toast(result.message, "success");
     $("login-email").value = $("reg-email").value;
+    $("register-form").reset();
     setAuthTab("login");
   } catch (error) {
     toast(error.message, "error");
   }
 });
 
-$("logout-btn").addEventListener("click", async () => {
-  try { await api("/auth/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+$("account-signout").addEventListener("click", async () => {
+  try { await api("/auth/logout", { method: "POST" }); } catch (_) { /* token may be gone */ }
   clearSession();
   show("shop");
-  toast("Logged out");
+  toast("Signed out");
 });
 
 /* ------------------------------ catalogue ------------------------------ */
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function showBackendBanner(message) {
+  const banner = $("backend-banner");
+  const saved = localStorage.getItem("shopcart.apiBase");
+  banner.innerHTML =
+    "<div>" + message + "</div>" +
+    `<div class="banner-form">
+       <input id="api-url" type="url" placeholder="https://your-backend.onrender.com" value="${esc(API_BASE)}" />
+       <button class="btn btn-solid btn-sm" id="api-connect">Connect</button>
+       ${saved ? '<button class="btn btn-quiet btn-sm" id="api-reset">Use deployed default</button>' : ""}
+     </div>`;
+  banner.hidden = false;
 
-/**
- * Loads categories + products. Free hosts (Render, Railway) sleep when idle, so the first
- * request after a nap fails for up to a minute while the container boots - retry instead of
- * telling the user the backend is broken.
- */
+  const input = $("api-url");
+  const connect = () => {
+    const value = input.value.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//.test(value)) { toast("Enter a full URL starting with https://", "error"); return; }
+    localStorage.setItem("shopcart.apiBase", value);
+    location.reload();
+  };
+  $("api-connect").addEventListener("click", connect);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); connect(); } });
+  const reset = $("api-reset");
+  if (reset) reset.addEventListener("click", () => { localStorage.removeItem("shopcart.apiBase"); location.reload(); });
+}
+
 async function loadCatalogue(attempt = 1) {
   try {
     state.categories = await api("/catalog/categories", { auth: false });
-    renderChips();
+    renderCategoryBar();
     await loadProducts();
-    if (STATIC_HOST) {
-      $("backend-banner").hidden = true;
-    }
+    if (STATIC_HOST) $("backend-banner").hidden = true;
   } catch (error) {
     const retryable = !error.status || error.status >= 500;
     if (retryable && attempt <= 3 && STATIC_HOST) {
       showBackendBanner(
-        "<strong>Waking the backend&hellip;</strong> free hosts sleep when idle, so the first request can " +
-        "take up to a minute. Retrying (" + attempt + "/3)."
+        "<strong>Waking the backend…</strong> free hosts sleep when idle, so the first request can take up to a minute. Retrying (" + attempt + "/3)."
       );
       await sleep(4000 * attempt);
       return loadCatalogue(attempt + 1);
     }
     toast(error.message, "error");
-    if (STATIC_HOST) {
-      showBackendBanner("<strong>Could not load the catalogue.</strong> " + esc(error.message) +
-        " Point the storefront at a running backend below.");
-    }
+    if (STATIC_HOST) showBackendBanner("<strong>The catalogue could not be loaded.</strong> " + esc(error.message));
+    $("product-grid").innerHTML = "";
     $("product-count").textContent = "";
-    $("shop-empty").hidden = true;
-    $("product-grid").innerHTML = `
-      <div class="panel empty" style="grid-column:1/-1">
-        <h3>The catalogue could not be loaded</h3>
-        <p class="muted">${esc(error.message)}</p>
-        <p class="muted">The storefront on GitHub Pages needs a running ShopCart API.
-        Point <code>apiBase</code> in <code>docs/config.js</code> at your backend (for example
-        <code>https://shopcart-api.onrender.com</code>) and reload.</p>
-      </div>`;
   }
 }
 
-function renderChips() {
-  const chips = [{ slug: "all", name: "All products" }, ...state.categories];
-  $("category-chips").innerHTML = chips
+function renderCategoryBar() {
+  const items = [{ slug: "all", name: "All" }, ...state.categories];
+  $("category-bar").innerHTML = items
     .map(
-      (category) =>
-        `<button class="chip ${state.category === category.slug ? "active" : ""}" data-category="${esc(category.slug)}">${esc(category.name)}</button>`
+      (c) =>
+        `<button class="nav-item ${state.category === c.slug ? "is-active" : ""}" data-cat="${esc(c.slug)}">${esc(c.name)}</button>`
     )
     .join("");
-  $("category-chips").querySelectorAll("[data-category]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      state.category = chip.dataset.category;
-      renderChips();
+  $("category-bar").querySelectorAll("[data-cat]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.category = btn.dataset.cat;
+      renderCategoryBar();
+      $("catalogue-title").textContent =
+        btn.dataset.cat === "all" ? "Shop all" : state.categories.find((c) => c.slug === btn.dataset.cat).name;
       loadProducts();
     });
   });
@@ -313,41 +319,75 @@ async function loadProducts() {
   if (state.category !== "all") params.set("category", state.category);
   if (state.query) params.set("q", state.query);
   try {
-    const products = await api("/catalog/products?" + params.toString(), { auth: false });
-    renderProducts(products);
+    state.products = await api("/catalog/products?" + params.toString(), { auth: false });
+    renderProducts();
   } catch (error) {
     toast(error.message, "error");
   }
 }
 
-function renderProducts(products) {
-  $("product-count").textContent = products.length + " item" + (products.length === 1 ? "" : "s");
-  $("shop-empty").hidden = products.length > 0;
-  $("product-grid").innerHTML = products
-    .map((product) => {
-      const stockLabel =
-        product.stock === 0
-          ? '<span class="stock out">Out of stock</span>'
-          : product.stock <= 5
-          ? `<span class="stock low">Only ${product.stock} left</span>`
-          : `<span class="stock">${product.stock} in stock</span>`;
+function sortedProducts() {
+  const list = [...state.products];
+  const by = state.sort;
+  if (by === "price-asc") list.sort((a, b) => a.price - b.price);
+  if (by === "price-desc") list.sort((a, b) => b.price - a.price);
+  if (by === "rating") list.sort((a, b) => b.rating - a.rating);
+  if (by === "discount") list.sort((a, b) => discountPct(b.price, b.mrp) - discountPct(a.price, a.mrp));
+  return list;
+}
+
+function productTag(p) {
+  const off = discountPct(p.price, p.mrp);
+  if (p.stock === 0) return '<span class="tag low">Sold out</span>';
+  if (off >= 20) return `<span class="tag sale">${off}% off</span>`;
+  if (p.reviewCount > 1000 && p.rating >= 4.5) return '<span class="tag">Bestseller</span>';
+  if (p.stock <= 5) return '<span class="tag low">Low stock</span>';
+  return "";
+}
+
+function renderProducts() {
+  const list = sortedProducts();
+  $("product-count").textContent = list.length + (list.length === 1 ? " product" : " products");
+  $("shop-empty").hidden = list.length > 0;
+
+  $("product-grid").innerHTML = list
+    .map((p) => {
+      const off = discountPct(p.price, p.mrp);
+      const out = p.stock === 0;
       return `
-        <article class="card" data-product="${product.id}">
-          <div class="card-art">${esc(product.image || "📦")}</div>
-          <div class="card-body">
-            <span class="card-cat">${esc(product.category)}</span>
-            <span class="card-name">${esc(product.name)}</span>
-            <div class="card-foot">
-              <span class="price">${money(product.price)}</span>
-              ${stockLabel}
-            </div>
+      <article class="card-product">
+        <div class="card-art" data-open="${p.id}">
+          ${productTag(p)}
+          <button class="quick-add" data-add="${p.id}" ${out ? "disabled" : ""}>
+            ${out ? "Sold out" : "Add to bag"}
+          </button>
+          ${productArt(p.image)}
+        </div>
+        <div class="card-body">
+          <span class="card-brand">${esc(p.brand)}</span>
+          <span class="card-name" data-open="${p.id}">${esc(p.name)}</span>
+          <div class="rating">${starsSvg(p.rating)}<span>${p.rating.toFixed(1)} · ${p.reviewCount} reviews</span></div>
+          <div class="price-row">
+            <span class="price">${money(p.price)}</span>
+            ${off > 0 ? `<span class="mrp">${money(p.mrp)}</span><span class="off">${off}% off</span>` : ""}
           </div>
-        </article>`;
+          ${p.stock > 0 && p.stock <= 5 ? `<span class="stock-note">Only ${p.stock} left</span>` : ""}
+        </div>
+      </article>`;
     })
     .join("");
 
-  $("product-grid").querySelectorAll("[data-product]").forEach((card) => {
-    card.addEventListener("click", () => openProduct(Number(card.dataset.product)));
+  $("product-grid").querySelectorAll("[data-open]").forEach((el) => {
+    el.addEventListener("click", (event) => {
+      if (event.target.closest("[data-add]")) return;
+      openProduct(Number(el.dataset.open));
+    });
+  });
+  $("product-grid").querySelectorAll("[data-add]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      addToCart(Number(btn.dataset.add), 1);
+    });
   });
 }
 
@@ -358,47 +398,69 @@ $("search-input").addEventListener("input", (event) => {
   searchTimer = setTimeout(loadProducts, 260);
 });
 
-/* ------------------------------ product modal ------------------------------ */
+$("sort-select").addEventListener("change", (event) => {
+  state.sort = event.target.value;
+  renderProducts();
+});
+
+$("clear-filters").addEventListener("click", () => {
+  state.category = "all";
+  state.query = "";
+  $("search-input").value = "";
+  $("catalogue-title").textContent = "Shop all";
+  renderCategoryBar();
+  loadProducts();
+});
+
+/* ------------------------------ product sheet ------------------------------ */
 
 async function openProduct(id) {
   try {
-    const product = await api("/catalog/products/" + id, { auth: false });
-    const out = product.stock === 0;
+    const p = await api("/catalog/products/" + id, { auth: false });
+    const off = discountPct(p.price, p.mrp);
+    const out = p.stock === 0;
     $("product-detail").innerHTML = `
-      <div class="pd-head">
-        <div class="pd-art">${esc(product.image || "📦")}</div>
+      <div class="pd">
+        <div class="pd-art">${productArt(p.image)}</div>
         <div>
-          <span class="card-cat">${esc(product.category)}</span>
-          <h2>${esc(product.name)}</h2>
-          <div class="pd-price">${money(product.price)}</div>
+          <p class="pd-brand">${esc(p.brand)} · ${esc(p.category)}</p>
+          <h2>${esc(p.name)}</h2>
+          <div class="rating">${starsSvg(p.rating)}<span>${p.rating.toFixed(1)} · ${p.reviewCount} reviews</span></div>
+          <div class="pd-price">
+            <span class="price">${money(p.price)}</span>
+            ${off > 0 ? `<span class="mrp">${money(p.mrp)}</span><span class="off">${off}% off</span>` : ""}
+          </div>
+          <p class="muted">Inclusive of all taxes</p>
+          <p class="pd-desc">${esc(p.description)}</p>
+          <ul class="pd-facts">
+            <li><svg viewBox="0 0 20 20"><path d="M2 6h9v8H2zM11 8h4l3 3v3h-7z"/><circle cx="6" cy="15" r="1.6"/><circle cx="15" cy="15" r="1.6"/></svg>
+              ${out ? "Currently unavailable" : "In stock — dispatched within 24 hours"}</li>
+            <li><svg viewBox="0 0 20 20"><path d="M10 2.5 3.5 5.5v5c0 3.4 2.7 6 6.5 7 3.8-1 6.5-3.6 6.5-7v-5z"/></svg>
+              Two-year warranty · 30-day returns</li>
+            <li><svg viewBox="0 0 20 20"><path d="M3 10.5 8 15l9-9"/></svg>
+              Free delivery over ₹999</li>
+          </ul>
+          <div class="pd-actions">
+            <div class="qty">
+              <button type="button" id="pd-minus" aria-label="Decrease">−</button>
+              <span id="pd-qty">1</span>
+              <button type="button" id="pd-plus" aria-label="Increase">+</button>
+            </div>
+            <button class="btn btn-solid" id="pd-add" ${out ? "disabled" : ""}>${out ? "Sold out" : "Add to bag"}</button>
+          </div>
         </div>
-      </div>
-      <p class="pd-desc">${esc(product.description || "No description available.")}</p>
-      <p class="muted">${out ? "Currently out of stock." : product.stock + " unit(s) available."}</p>
-      <div class="pd-actions">
-        <div class="stepper">
-          <button type="button" id="pd-minus">−</button>
-          <span id="pd-qty">1</span>
-          <button type="button" id="pd-plus">+</button>
-        </div>
-        <button class="btn btn-primary" id="pd-add" ${out ? "disabled" : ""}>
-          ${out ? "Out of stock" : "Add to cart"}
-        </button>
       </div>`;
     $("product-modal").hidden = false;
 
     let qty = 1;
-    $("pd-minus").addEventListener("click", () => {
-      qty = Math.max(1, qty - 1);
-      $("pd-qty").textContent = qty;
-    });
+    $("pd-minus").addEventListener("click", () => { qty = Math.max(1, qty - 1); $("pd-qty").textContent = qty; });
     $("pd-plus").addEventListener("click", () => {
-      qty = Math.min(product.stock || 1, qty + 1);
+      qty = Math.min(p.stock || 1, qty + 1);
       $("pd-qty").textContent = qty;
     });
     $("pd-add").addEventListener("click", async () => {
       $("product-modal").hidden = true;
-      await addToCart(product.id, qty);
+      await addToCart(p.id, qty);
     });
   } catch (error) {
     toast(error.message, "error");
@@ -409,7 +471,7 @@ async function openProduct(id) {
 
 async function addToCart(productId, quantity) {
   if (!state.user) {
-    state.pendingAdd = { productId, quantity };
+    state.pending = { productId, quantity };
     openAuth("login");
     return;
   }
@@ -453,7 +515,12 @@ function renderCart(bill) {
   $("cart-count").textContent = bill.itemCount;
 
   if (!bill.lines.length) {
-    $("cart-lines").innerHTML = `<div class="panel empty">Your cart is empty. <button class="link" data-nav="shop">Start shopping</button></div>`;
+    $("cart-lines").innerHTML = `
+      <div class="card" style="text-align:center;padding:56px 24px">
+        <h2>Your bag is empty</h2>
+        <p class="muted" style="margin:8px 0 20px">Nothing added yet.</p>
+        <button class="btn btn-solid" data-nav="shop">Browse the collection</button>
+      </div>`;
     $("bill-panel").innerHTML = "";
     return;
   }
@@ -462,82 +529,70 @@ function renderCart(bill) {
     .map(
       (line) => `
       <div class="line">
-        <div class="line-art">${esc(line.image || "📦")}</div>
-        <div>
-          <div class="line-name">${esc(line.name)}</div>
-          <div class="muted">${money(line.price)} each · ${line.stock} in stock</div>
+        <div class="line-art">${productArt(line.image)}</div>
+        <div class="line-main">
+          <span class="line-brand">${esc(line.brand || "")}</span>
+          <span class="line-name">${esc(line.name)}</span>
+          <span class="line-meta">${money(line.price)} each · ${line.stock} in stock</span>
+          <div class="line-controls">
+            <div class="qty">
+              <button data-dec="${line.productId}" aria-label="Decrease">−</button>
+              <span>${line.quantity}</span>
+              <button data-inc="${line.productId}" data-max="${line.stock}" aria-label="Increase">+</button>
+            </div>
+            <button class="line-remove" data-remove="${line.productId}">Remove</button>
+          </div>
         </div>
-        <div class="stepper">
-          <button data-dec="${line.productId}">−</button>
-          <span>${line.quantity}</span>
-          <button data-inc="${line.productId}" data-max="${line.stock}">+</button>
-        </div>
-        <div style="text-align:right">
-          <div class="price">${money(line.subtotal)}</div>
-          <button class="link" data-remove="${line.productId}">Remove</button>
-        </div>
+        <div class="line-total">${money(line.subtotal)}</div>
       </div>`
     )
     .join("");
 
-  $("cart-lines").querySelectorAll("[data-inc]").forEach((btn) => {
-    btn.addEventListener("click", () => updateQuantity(Number(btn.dataset.inc), Number(btn.dataset.max)));
-  });
-  $("cart-lines").querySelectorAll("[data-dec]").forEach((btn) => {
-    btn.addEventListener("click", () => updateQuantity(Number(btn.dataset.dec), null));
-  });
-  $("cart-lines").querySelectorAll("[data-remove]").forEach((btn) => {
-    btn.addEventListener("click", () => removeItem(Number(btn.dataset.remove)));
-  });
+  $("cart-lines").querySelectorAll("[data-inc]").forEach((b) =>
+    b.addEventListener("click", () => updateQuantity(Number(b.dataset.inc), Number(b.dataset.max)))
+  );
+  $("cart-lines").querySelectorAll("[data-dec]").forEach((b) =>
+    b.addEventListener("click", () => updateQuantity(Number(b.dataset.dec), null))
+  );
+  $("cart-lines").querySelectorAll("[data-remove]").forEach((b) =>
+    b.addEventListener("click", () => removeItem(Number(b.dataset.remove)))
+  );
 
-  renderBill(bill, $("bill-panel"), { couponInput: true, checkoutButton: true });
+  renderSummary(bill, $("bill-panel"), { coupon: true, checkout: true });
 }
 
-function renderBill(bill, target, options = {}) {
-  const lines = bill.lines || [];
-  const shippingRow =
-    Number(bill.shipping) === 0
-      ? `<div class="bill-row"><span>Shipping</span><span class="free">FREE</span></div>`
-      : `<div class="bill-row"><span>Shipping</span><span>${money(bill.shipping)}</span></div>`;
-  const discountRow =
-    Number(bill.discount) > 0
-      ? `<div class="bill-row"><span>Discount ${bill.couponCode ? "(" + esc(bill.couponCode) + ")" : ""}</span><span class="save">− ${money(bill.discount)}</span></div>`
-      : "";
-  const freeShipNote =
-    Number(bill.freeShippingGap) > 0
-      ? `<div class="notice">Add ${money(bill.freeShippingGap)} more for free delivery.</div>`
-      : `<div class="notice good">Free delivery unlocked.</div>`;
-
+function renderSummary(bill, target, options = {}) {
+  const free = Number(bill.shipping) === 0;
   target.innerHTML = `
-    <h3>Bill details</h3>
-    ${lines.length ? freeShipNote : ""}
-    <div class="bill-row"><span>Subtotal (${bill.itemCount} item${bill.itemCount === 1 ? "" : "s"})</span><span>${money(bill.subtotal)}</span></div>
-    <div class="bill-row"><span>GST (${(Number(bill.taxRate) * 100).toFixed(0)}%)</span><span>${money(bill.tax)}</span></div>
-    ${shippingRow}
-    ${discountRow}
-    <div class="bill-row total"><span>Grand total</span><span>${money(bill.grandTotal)}</span></div>
-    ${
-      options.couponInput
-        ? `<div class="coupon-row">
-             <input id="coupon-input" placeholder="Coupon code" value="${esc(bill.couponCode || "")}" />
-             <button class="btn btn-ghost btn-sm" id="coupon-apply">Apply</button>
-           </div>
-           <p class="hint">Try WELCOME10 or FLAT100.</p>`
-        : ""
-    }
-    ${
-      options.checkoutButton
-        ? `<button class="btn btn-primary btn-block" id="go-checkout" style="margin-top:14px">Proceed to checkout</button>`
-        : ""
-    }`;
+    <h2>Order summary</h2>
+    ${Number(bill.freeShippingGap) > 0
+      ? `<div class="ship-note">Add ${money(bill.freeShippingGap)} more for free delivery</div>`
+      : `<div class="ship-note">Free delivery applied</div>`}
+    <div class="sum-row"><span>Subtotal (${bill.itemCount} item${bill.itemCount === 1 ? "" : "s"})</span><span>${money(bill.subtotal)}</span></div>
+    <div class="sum-row"><span>GST (${(Number(bill.taxRate) * 100).toFixed(0)}%)</span><span>${money(bill.tax)}</span></div>
+    <div class="sum-row"><span>Delivery</span>${free ? '<span class="free">Free</span>' : `<span>${money(bill.shipping)}</span>`}</div>
+    ${Number(bill.discount) > 0
+      ? `<div class="sum-row"><span>Discount${bill.couponCode ? " (" + esc(bill.couponCode) + ")" : ""}</span><span class="save">− ${money(bill.discount)}</span></div>`
+      : ""}
+    <div class="sum-row total"><span>Total</span><span>${money(bill.grandTotal)}</span></div>
+    ${options.coupon
+      ? `<div class="coupon">
+           <input id="coupon-input" placeholder="Coupon code" value="${esc(bill.couponCode || "")}" />
+           <button class="btn btn-quiet btn-sm" id="coupon-apply">Apply</button>
+         </div>
+         <p class="hint">Try WELCOME10 or FLAT100.</p>`
+      : ""}
+    ${options.checkout ? '<button class="btn btn-solid btn-block" id="go-checkout">Proceed to checkout</button>' : ""}
+    <p class="sum-note">
+      <svg viewBox="0 0 20 20"><path d="M10 2.5 3.5 5.5v5c0 3.4 2.7 6 6.5 7 3.8-1 6.5-3.6 6.5-7v-5z"/></svg>
+      Secure checkout · 30-day returns
+    </p>`;
 
-  if (options.couponInput) {
+  if (options.coupon) {
     $("coupon-apply").addEventListener("click", applyCoupon);
-    $("coupon-input").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") { event.preventDefault(); applyCoupon(); }
-    });
+    $("coupon-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } });
   }
-  if (options.checkoutButton) {
+  if (options.checkout) {
     $("go-checkout").addEventListener("click", () => {
       if (!state.user) { openAuth("login"); return; }
       show("checkout");
@@ -547,10 +602,7 @@ function renderBill(bill, target, options = {}) {
 
 async function applyCoupon() {
   const code = $("coupon-input").value.trim();
-  if (!code) {
-    state.couponCode = null;
-    return loadCart();
-  }
+  if (!code) { state.couponCode = null; return loadCart(); }
   try {
     const bill = await api("/cart/quote", { method: "POST", body: { couponCode: code } });
     state.couponCode = bill.couponCode;
@@ -563,7 +615,7 @@ async function applyCoupon() {
 }
 
 async function updateQuantity(productId, max) {
-  const line = (state.bill?.lines || []).find((item) => item.productId === productId);
+  const line = (state.bill?.lines || []).find((l) => l.productId === productId);
   if (!line) return;
   let next = line.quantity;
   if (max === null) next -= 1;
@@ -582,14 +634,12 @@ async function updateQuantity(productId, max) {
 async function removeItem(productId) {
   try {
     await api("/cart/items/" + productId, { method: "DELETE" });
-    toast("Item removed");
+    toast("Removed from bag");
     loadCart();
   } catch (error) {
     toast(error.message, "error");
   }
 }
-
-$("continue-shopping").addEventListener("click", () => show("shop"));
 
 /* ------------------------------ checkout ------------------------------ */
 
@@ -599,12 +649,11 @@ async function loadCheckout() {
       ? await api("/cart/quote", { method: "POST", body: { couponCode: state.couponCode } })
       : await api("/cart");
     state.bill = bill;
-    if (!bill.lines.length) {
-      toast("Your cart is empty", "error");
-      return show("shop");
-    }
-    $("checkout-address").value = state.user?.address || "";
-    renderBill(bill, $("checkout-bill"), {});
+    if (!bill.lines.length) { toast("Your bag is empty", "error"); return show("shop"); }
+    if (!$("co-name").value) $("co-name").value = state.user?.name || "";
+    if (!$("co-phone").value) $("co-phone").value = state.user?.phone || "";
+    if (!$("co-line1").value) $("co-line1").value = state.user?.address || "";
+    renderSummary(bill, $("checkout-bill"), {});
     updatePayDetail();
   } catch (error) {
     toast(error.message, "error");
@@ -620,38 +669,35 @@ function updatePayDetail() {
   const field = $("pay-detail-field");
   const label = $("pay-detail-label");
   const input = $("pay-detail");
-  if (method === "COD") {
-    field.hidden = true;
-    input.value = "";
-    return;
-  }
+  if (method === "COD") { field.hidden = true; input.value = ""; return; }
   field.hidden = false;
-  if (method === "CARD") {
-    label.textContent = "Card number";
-    input.placeholder = "4111 1111 1111 1111";
-  } else if (method === "UPI") {
-    label.textContent = "UPI ID";
-    input.placeholder = "yourname@okhdfcbank";
-  } else {
-    label.textContent = "Bank";
-    input.placeholder = "HDFC Bank";
-  }
+  if (method === "CARD") { label.textContent = "Card number"; input.placeholder = "4111 1111 1111 1111"; }
+  else if (method === "UPI") { label.textContent = "UPI ID"; input.placeholder = "yourname@okhdfcbank"; }
+  else { label.textContent = "Bank"; input.placeholder = "HDFC Bank"; }
 }
 
-document.querySelectorAll('input[name="pay"]').forEach((radio) => {
-  radio.addEventListener("change", updatePayDetail);
-});
+document.querySelectorAll('input[name="pay"]').forEach((r) => r.addEventListener("change", updatePayDetail));
 
 $("checkout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const pin = $("co-pin").value.trim();
+  if (!/^\d{6}$/.test(pin)) { toast("Enter a 6-digit PIN code", "error"); return; }
+
+  const address = [
+    $("co-name").value.trim(),
+    $("co-line1").value.trim() + ($("co-line2").value.trim() ? ", " + $("co-line2").value.trim() : ""),
+    $("co-city").value.trim() + ", " + $("co-state").value.trim() + " " + pin,
+    $("co-phone").value.trim(),
+  ].join(" · ");
+
   const button = $("place-order-btn");
   button.disabled = true;
-  button.textContent = "Processing payment...";
+  button.textContent = "Processing…";
   try {
     const order = await api("/checkout", {
       method: "POST",
       body: {
-        shippingAddress: $("checkout-address").value.trim(),
+        shippingAddress: address,
         paymentMethod: currentPayMethod(),
         paymentDetail: $("pay-detail").value.trim(),
         couponCode: state.couponCode,
@@ -662,111 +708,171 @@ $("checkout-form").addEventListener("submit", async (event) => {
     renderConfirmation(order);
     show("confirmation");
   } catch (error) {
-    // Algorithm A step 21 - stay on the payment step so the user can retry.
-    toast(error.message, "error");
+    toast(error.message, "error"); // stay on the payment step so the user can retry
   } finally {
     button.disabled = false;
-    button.textContent = "Pay & place order";
+    button.textContent = "Pay and place order";
   }
 });
 
 function renderConfirmation(order) {
-  const steps = timelineHtml(order);
   $("confirmation-panel").innerHTML = `
-    <div class="tick">✅</div>
-    <h2>Order placed successfully</h2>
-    <p class="muted">${esc(order.paymentMethod === "COD" ? "Pay on delivery" : "Payment received")} · confirmation sent to ${esc(order.customerEmail)}</p>
-    <div class="order-code">${esc(order.orderCode)}</div>
-    <div class="bill-row"><span>Items</span><span>${order.items.reduce((sum, item) => sum + item.quantity, 0)}</span></div>
-    <div class="bill-row total"><span>Amount</span><span>${money(order.grandTotal)}</span></div>
-    <p class="muted" style="margin-top:10px">Delivering to: ${esc(order.shippingAddress)}</p>
-    ${steps}
+    <span class="mark"><svg viewBox="0 0 24 24"><path d="M4 12.5 9.5 18 20 7"/></svg></span>
+    <h2>Thank you — your order is confirmed</h2>
+    <p class="muted">A confirmation has been sent to ${esc(order.customerEmail)}.</p>
+    <div class="order-ref">${esc(order.orderCode)}</div>
+    <div class="sum-row"><span>Payment</span><span>${esc(PAY_LABELS[order.paymentMethod] || order.paymentMethod)} · ${esc(order.paymentStatus)}</span></div>
+    <div class="sum-row"><span>Items</span><span>${order.items.reduce((s, i) => s + i.quantity, 0)}</span></div>
+    <div class="sum-row total"><span>Total paid</span><span>${money(order.grandTotal)}</span></div>
+    <p class="muted" style="margin-top:16px">Delivering to ${esc(order.shippingAddress)}</p>
+    ${timelineHtml(order)}
     <div class="confirm-actions">
-      <button class="btn btn-primary" data-nav="orders">Track order</button>
-      <button class="btn btn-ghost" data-nav="shop">Shop again</button>
+      <button class="btn btn-solid" data-nav="orders">Track order</button>
+      <button class="btn btn-quiet" data-nav="shop">Continue shopping</button>
     </div>`;
 }
 
 /* ------------------------------ orders ------------------------------ */
 
+function timelineHtml(order) {
+  if (order.status === "CANCELLED") {
+    return `<div class="timeline"><span class="tl-step current"><span class="tl-dot"></span>Cancelled</span></div>`;
+  }
+  const current = STATUS_FLOW.indexOf(order.status);
+  return `<div class="timeline">${STATUS_FLOW.map((status, i) => {
+    const cls = i < current ? "done" : i === current ? "current" : "";
+    const label = status.replaceAll("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
+    return `<span class="tl-step ${cls}"><span class="tl-dot"></span>${label}<span class="tl-bar"></span></span>`;
+  }).join("")}</div>`;
+}
+
 async function loadOrders() {
   try {
     const orders = await api("/orders");
     if (!orders.length) {
-      $("orders-list").innerHTML = `<div class="panel empty">You have not placed any orders yet.</div>`;
+      $("orders-list").innerHTML = `
+        <div class="card" style="text-align:center;padding:56px 24px">
+          <h2>No orders yet</h2>
+          <p class="muted" style="margin:8px 0 20px">When you place an order it will appear here.</p>
+          <button class="btn btn-solid" data-nav="shop">Start shopping</button>
+        </div>`;
       return;
     }
     $("orders-list").innerHTML = orders
       .map(
         (order) => `
-        <article class="order-card">
+        <article class="order">
           <div class="order-top">
             <div>
-              <strong>${esc(order.orderCode)}</strong>
+              <div class="order-ref-sm">${esc(order.orderCode)}</div>
               <div class="order-meta">
                 <span>${esc(order.createdAt)}</span>
                 <span>${esc(PAY_LABELS[order.paymentMethod] || order.paymentMethod)} · ${esc(order.paymentStatus)}</span>
-                <span>${order.items.reduce((sum, item) => sum + item.quantity, 0)} item(s)</span>
+                <span>${order.items.reduce((s, i) => s + i.quantity, 0)} item(s)</span>
               </div>
             </div>
-            <span class="status ${esc(order.status)}">${esc(order.statusLabel)}</span>
+            <span class="pill ${esc(order.status)}">${esc(order.statusLabel)}</span>
           </div>
           ${timelineHtml(order)}
           <div class="order-items">
             ${order.items
               .map(
-                (item) => `<div class="order-item"><span>${esc(item.image || "📦")} ${esc(item.name)} × ${item.quantity}</span><span>${money(item.lineTotal)}</span></div>`
+                (item) => `
+              <div class="order-item">
+                <span class="oi-left"><span class="oi-art">${productArt(item.image)}</span>${esc(item.name)} × ${item.quantity}</span>
+                <span>${money(item.lineTotal)}</span>
+              </div>`
               )
               .join("")}
           </div>
           <div class="order-foot">
-            <span class="price">${money(order.grandTotal)}</span>
-            ${order.cancellable ? `<button class="btn btn-danger btn-sm" data-cancel="${esc(order.orderCode)}">Cancel order</button>` : ""}
+            <strong>${money(order.grandTotal)}</strong>
+            ${order.cancellable ? `<button class="btn btn-quiet btn-sm" data-cancel="${esc(order.orderCode)}">Cancel order</button>` : ""}
           </div>
         </article>`
       )
       .join("");
 
-    $("orders-list").querySelectorAll("[data-cancel]").forEach((btn) => {
-      btn.addEventListener("click", () => cancelOrder(btn.dataset.cancel));
-    });
+    $("orders-list").querySelectorAll("[data-cancel]").forEach((b) =>
+      b.addEventListener("click", () => cancelOrder(b.dataset.cancel))
+    );
   } catch (error) {
     toast(error.message, "error");
   }
 }
 
-function timelineHtml(order) {
-  if (order.status === "CANCELLED") {
-    return `<div class="timeline"><span class="step current" style="background:#dc2626">Cancelled</span></div>`;
-  }
-  const currentIndex = STATUS_FLOW.indexOf(order.status);
-  return `<div class="timeline">${STATUS_FLOW.map((status, index) => {
-    const cls = index < currentIndex ? "done" : index === currentIndex ? "current" : "";
-    return `<span class="step ${cls}">${status.replaceAll("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}</span>`;
-  }).join("")}</div>`;
-}
-
 async function cancelOrder(orderCode) {
-  if (!confirm("Cancel order " + orderCode + "? The stock will be returned to the catalogue.")) return;
+  if (!confirm("Cancel order " + orderCode + "? The items go back into stock.")) return;
   try {
     await api("/orders/" + orderCode + "/cancel", { method: "POST" });
-    toast("Order cancelled and stock restored", "success");
+    toast("Order cancelled", "success");
     loadOrders();
   } catch (error) {
     toast(error.message, "error");
   }
 }
 
+/* ------------------------------ account ------------------------------ */
+
+async function loadAccount() {
+  if (!state.user) { openAuth("login"); return; }
+  const u = state.user;
+  $("account-profile").innerHTML = `
+    <h2>Profile</h2>
+    <div class="kv"><span>Name</span><span>${esc(u.name)}</span></div>
+    <div class="kv"><span>Email</span><span>${esc(u.email)}</span></div>
+    <div class="kv"><span>Phone</span><span>${esc(u.phone)}</span></div>
+    <div class="kv"><span>Delivery address</span><span>${esc(u.address || "—")}</span></div>
+    <div class="kv"><span>Account type</span><span>${u.role === "ADMIN" ? "Administrator" : "Customer"}</span></div>
+    <div class="hero-actions" style="margin:22px 0 0">
+      <button class="btn btn-quiet btn-sm" data-nav="orders">View orders</button>
+      ${u.role === "ADMIN" ? '<button class="btn btn-quiet btn-sm" data-nav="admin">Admin dashboard</button>' : ""}
+    </div>`;
+
+  try {
+    const orders = await api("/orders");
+    $("account-orders").innerHTML = `
+      <h2>Recent orders</h2>
+      ${orders.length
+        ? orders.slice(0, 4).map((o) => `
+            <div class="kv">
+              <span>${esc(o.orderCode)}</span>
+              <span>${money(o.grandTotal)} · ${esc(o.statusLabel)}</span>
+            </div>`).join("")
+        : '<p class="muted">No orders yet.</p>'}
+      <button class="btn btn-quiet btn-sm" data-nav="orders" style="margin-top:18px">All orders</button>`;
+  } catch (error) {
+    $("account-orders").innerHTML = `<h2>Recent orders</h2><p class="muted">${esc(error.message)}</p>`;
+  }
+}
+
+$("delete-account-btn").addEventListener("click", async () => {
+  const password = $("delete-password").value;
+  $("delete-hint").textContent = "";
+  if (!password) { toast("Enter your password to confirm", "error"); return; }
+  if (!confirm("Delete your account and all its data? This cannot be undone.")) return;
+  try {
+    const result = await api("/auth/account", { method: "DELETE", body: { password } });
+    clearSession();
+    toast(result.message, "success");
+    show("shop");
+    await loadCatalogue();
+  } catch (error) {
+    $("delete-hint").textContent = error.message;
+    toast(error.message, "error");
+  }
+});
+
 /* ------------------------------ admin ------------------------------ */
 
 document.querySelectorAll("#admin-tabs .tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     state.adminTab = tab.dataset.tab;
-    document.querySelectorAll("#admin-tabs .tab").forEach((t) => t.classList.toggle("active", t === tab));
-    ["reports", "products", "orders"].forEach((name) => { $("tab-" + name).hidden = name !== state.adminTab; });
+    document.querySelectorAll("#admin-tabs .tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    ["overview", "products", "orders"].forEach((name) => { $("tab-" + name).hidden = name !== state.adminTab; });
     if (state.adminTab === "products") loadAdminProducts();
     if (state.adminTab === "orders") loadAdminOrders();
-    if (state.adminTab === "reports") loadReports();
+    if (state.adminTab === "overview") loadReports();
   });
 });
 
@@ -779,33 +885,30 @@ async function loadAdmin() {
 
 async function loadReports() {
   try {
-    const report = await api("/admin/reports");
+    const r = await api("/admin/reports");
     const stats = [
-      ["Revenue", money(report.revenue)],
-      ["Orders", report.totalOrders],
-      ["Delivered", report.delivered],
-      ["In progress", report.placed + report.processing + report.shipped + report.outForDelivery],
-      ["Cancelled", report.cancelled],
-      ["Products", report.products],
-      ["Low stock", report.lowStock],
-      ["Customers", report.customers],
+      ["Revenue", money(r.revenue)],
+      ["Orders", r.totalOrders],
+      ["Delivered", r.delivered],
+      ["In progress", r.placed + r.processing + r.shipped + r.outForDelivery],
+      ["Cancelled", r.cancelled],
+      ["Products", r.products],
+      ["Low stock", r.lowStock],
+      ["Customers", r.customers],
     ];
-    $("stat-grid").innerHTML = stats
+    $("stat-row").innerHTML = stats
       .map(([label, value]) => `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`)
       .join("");
 
-    $("low-stock").innerHTML = report.lowStockProducts.length
-      ? `<table><thead><tr><th>Product</th><th>Stock</th></tr></thead><tbody>${report.lowStockProducts
-          .map((product) => `<tr><td>${esc(product.image || "📦")} ${esc(product.name)}</td><td>${product.stock}</td></tr>`)
-          .join("")}</tbody></table>`
-      : `<p class="muted">Every product is comfortably in stock.</p>`;
+    $("low-stock").innerHTML = r.lowStockProducts.length
+      ? `<table><thead><tr><th>Product</th><th>Stock</th></tr></thead><tbody>${r.lowStockProducts
+          .map((p) => `<tr><td>${esc(p.name)}</td><td>${p.stock}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="muted">Everything is comfortably in stock.</p>`;
 
-    $("recent-orders").innerHTML = report.recentOrders.length
-      ? `<table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody>${report.recentOrders
-          .map(
-            (order) =>
-              `<tr><td>${esc(order.orderCode)}</td><td>${esc(order.customerName)}</td><td><span class="status ${esc(order.status)}">${esc(order.statusLabel)}</span></td><td>${money(order.grandTotal)}</td></tr>`
-          )
+    $("recent-orders").innerHTML = r.recentOrders.length
+      ? `<table><thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody>${r.recentOrders
+          .map((o) => `<tr><td>${esc(o.orderCode)}</td><td>${esc(o.customerName)}</td>
+            <td><span class="pill ${esc(o.status)}">${esc(o.statusLabel)}</span></td><td>${money(o.grandTotal)}</td></tr>`)
           .join("")}</tbody></table>`
       : `<p class="muted">No orders yet.</p>`;
   } catch (error) {
@@ -817,55 +920,52 @@ async function loadAdminProducts() {
   try {
     const [products, categories] = await Promise.all([api("/admin/products"), api("/admin/categories")]);
     state.categories = categories;
-    $("p-category").innerHTML = categories
-      .map((category) => `<option value="${category.id}">${esc(category.name)}</option>`)
-      .join("");
+    $("p-category").innerHTML = categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    $("p-image").innerHTML = ART_KEYS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
 
     $("admin-products").innerHTML = `
       <table>
-        <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-        ${products
-          .map(
-            (product) => `
-            <tr>
-              <td>${esc(product.image || "📦")} ${esc(product.name)}</td>
-              <td>${esc(product.category)}</td>
-              <td>${money(product.price)}</td>
-              <td>${product.stock}</td>
-              <td>${product.active ? "Live" : "Hidden"}</td>
-              <td class="row-actions">
-                <button class="btn btn-ghost btn-sm" data-edit="${product.id}">Edit</button>
-                <button class="btn btn-danger btn-sm" data-delete="${product.id}">Delete</button>
-              </td>
-            </tr>`
-          )
-          .join("")}
-        </tbody>
+        <thead><tr><th>Product</th><th>Brand</th><th>Price</th><th>Stock</th><th>Rating</th><th></th></tr></thead>
+        <tbody>${products.map((p) => `
+          <tr>
+            <td><span class="cell-product"><span class="cell-art">${productArt(p.image)}</span>${esc(p.name)}</span></td>
+            <td>${esc(p.brand)}</td>
+            <td>${money(p.price)}</td>
+            <td>${p.stock}</td>
+            <td>${p.rating.toFixed(1)}</td>
+            <td class="row-actions">
+              <button class="btn btn-quiet btn-sm" data-edit="${p.id}">Edit</button>
+              <button class="btn btn-quiet btn-sm" data-delete="${p.id}">Delete</button>
+            </td>
+          </tr>`).join("")}</tbody>
       </table>`;
 
-    $("admin-products").querySelectorAll("[data-edit]").forEach((btn) => {
-      btn.addEventListener("click", () => fillProductForm(products.find((p) => p.id === Number(btn.dataset.edit))));
-    });
-    $("admin-products").querySelectorAll("[data-delete]").forEach((btn) => {
-      btn.addEventListener("click", () => deleteProduct(Number(btn.dataset.delete)));
-    });
+    $("admin-products").querySelectorAll("[data-edit]").forEach((b) =>
+      b.addEventListener("click", () => fillProductForm(products.find((p) => p.id === Number(b.dataset.edit))))
+    );
+    $("admin-products").querySelectorAll("[data-delete]").forEach((b) =>
+      b.addEventListener("click", () => deleteProduct(Number(b.dataset.delete)))
+    );
   } catch (error) {
     toast(error.message, "error");
   }
 }
 
-function fillProductForm(product) {
-  state.editingProduct = product.id;
-  $("product-form-title").textContent = "Update product";
-  $("p-id").value = product.id;
-  $("p-name").value = product.name;
-  $("p-price").value = product.price;
-  $("p-stock").value = product.stock;
-  $("p-image").value = product.image || "";
-  $("p-description").value = product.description || "";
-  const category = state.categories.find((c) => c.name === product.category);
-  if (category) $("p-category").value = category.id;
+function fillProductForm(p) {
+  state.editingProduct = p.id;
+  $("product-form-title").textContent = "Edit product";
+  $("p-id").value = p.id;
+  $("p-name").value = p.name;
+  $("p-brand").value = p.brand;
+  $("p-price").value = p.price;
+  $("p-mrp").value = p.mrp;
+  $("p-stock").value = p.stock;
+  $("p-image").value = p.image;
+  $("p-rating").value = p.rating;
+  $("p-reviews").value = p.reviewCount;
+  $("p-description").value = p.description || "";
+  const cat = state.categories.find((c) => c.name === p.category);
+  if (cat) $("p-category").value = cat.id;
   $("product-form").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -882,10 +982,14 @@ $("product-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = {
     name: $("p-name").value,
+    brand: $("p-brand").value,
     price: Number($("p-price").value),
+    mrp: Number($("p-mrp").value) || Number($("p-price").value),
     stock: Number($("p-stock").value),
     categoryId: Number($("p-category").value) || null,
-    image: $("p-image").value || "📦",
+    image: $("p-image").value || "package",
+    rating: Number($("p-rating").value) || 0,
+    reviewCount: Number($("p-reviews").value) || 0,
     description: $("p-description").value,
     active: true,
   };
@@ -918,46 +1022,36 @@ async function deleteProduct(id) {
 async function loadAdminOrders() {
   try {
     const orders = await api("/admin/orders");
-    if (!orders.length) {
-      $("admin-orders").innerHTML = `<p class="muted">No orders yet.</p>`;
-      return;
-    }
+    if (!orders.length) { $("admin-orders").innerHTML = '<p class="muted">No orders yet.</p>'; return; }
     $("admin-orders").innerHTML = `
       <table>
         <thead><tr><th>Order</th><th>Customer</th><th>Placed</th><th>Total</th><th>Status</th><th>Move to</th></tr></thead>
-        <tbody>
-        ${orders
-          .map(
-            (order) => `
-            <tr>
-              <td>${esc(order.orderCode)}</td>
-              <td>${esc(order.customerName)}<div class="muted">${esc(order.customerEmail)}</div></td>
-              <td>${esc(order.createdAt)}</td>
-              <td>${money(order.grandTotal)}</td>
-              <td><span class="status ${esc(order.status)}">${esc(order.statusLabel)}</span></td>
-              <td>
-                <select class="mini" data-order="${esc(order.orderCode)}">
-                  <option value="">Change status…</option>
-                  <option value="PROCESSING">Processing</option>
-                  <option value="SHIPPED">Shipped</option>
-                  <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
-                  <option value="DELIVERED">Delivered</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              </td>
-            </tr>`
-          )
-          .join("")}
-        </tbody>
+        <tbody>${orders.map((o) => `
+          <tr>
+            <td>${esc(o.orderCode)}</td>
+            <td>${esc(o.customerName)}<div class="muted">${esc(o.customerEmail)}</div></td>
+            <td>${esc(o.createdAt)}</td>
+            <td>${money(o.grandTotal)}</td>
+            <td><span class="pill ${esc(o.status)}">${esc(o.statusLabel)}</span></td>
+            <td>
+              <select class="mini-select" data-order="${esc(o.orderCode)}">
+                <option value="">Change…</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="SHIPPED">Shipped</option>
+                <option value="OUT_FOR_DELIVERY">Out for delivery</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </td>
+          </tr>`).join("")}</tbody>
       </table>`;
 
     $("admin-orders").querySelectorAll("[data-order]").forEach((select) => {
       select.addEventListener("change", async () => {
-        const status = select.value;
-        if (!status) return;
+        if (!select.value) return;
         try {
-          await api("/admin/orders/" + select.dataset.order + "/status", { method: "PATCH", body: { status } });
-          toast("Order moved to " + status.replaceAll("_", " ").toLowerCase(), "success");
+          await api("/admin/orders/" + select.dataset.order + "/status", { method: "PATCH", body: { status: select.value } });
+          toast("Order updated", "success");
           loadAdminOrders();
         } catch (error) {
           toast(error.message, "error");
@@ -972,79 +1066,20 @@ async function loadAdminOrders() {
 
 /* ------------------------------ boot ------------------------------ */
 
-function connectBoxHtml() {
-  const saved = localStorage.getItem("shopcart.apiBase");
-  return `<div class="banner-form">
-      <input id="api-url" type="url" placeholder="https://your-backend.onrender.com"
-             value="${esc(API_BASE)}" />
-      <button class="btn btn-primary btn-sm" id="api-connect">Connect</button>
-      ${saved ? '<button class="btn btn-ghost btn-sm" id="api-reset">Use deployed default</button>' : ""}
-    </div>`;
-}
-
-function wireConnectBox() {
-  const input = $("api-url");
-  if (!input) return;
-  const connect = () => {
-    const value = input.value.trim().replace(/\/+$/, "");
-    if (!/^https?:\/\//.test(value)) {
-      toast("Enter a full URL starting with https://", "error");
-      return;
-    }
-    localStorage.setItem("shopcart.apiBase", value);
-    location.reload();
-  };
-  $("api-connect").addEventListener("click", connect);
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") { event.preventDefault(); connect(); }
-  });
-  const reset = $("api-reset");
-  if (reset) {
-    reset.addEventListener("click", () => {
-      localStorage.removeItem("shopcart.apiBase");
-      location.reload();
-    });
-  }
-}
-
-function showBackendBanner(message) {
-  const banner = $("backend-banner");
-  banner.innerHTML = "<div>" + message + "</div>" + connectBoxHtml();
-  banner.hidden = false;
-  wireConnectBox();
-}
-
-(async function boot() {
+(function boot() {
   renderSession();
+  $("hero-art").innerHTML = productArt("headphones");
+  $("footer-api").textContent = API_BASE ? "API: " + API_BASE : "API: not configured";
 
   if (STATIC_HOST) {
-    const settings = $("api-settings");
-    settings.hidden = false;
-    settings.addEventListener("click", () => {
-      showBackendBanner("<strong>Backend URL.</strong> Currently using " +
-        (API_BASE ? "<code>" + esc(API_BASE) + "</code>" : "same origin (nothing configured)") + ".");
-    });
+    if (!API_BASE) {
+      showBackendBanner("<strong>Backend not connected.</strong> This storefront is hosted as a static site and needs the ShopCart API.");
+      $("product-grid").innerHTML = "";
+      return;
+    }
   }
 
-  if (STATIC_HOST && !API_BASE) {
-    showBackendBanner(
-      "<strong>Backend not connected.</strong> This storefront is hosted on GitHub Pages and needs the " +
-      "ShopCart API. Set <code>apiBase</code> in <code>docs/config.js</code> to your deployed backend URL."
-    );
-    $("category-chips").innerHTML = "";
-    $("product-count").textContent = "";
-    $("product-grid").innerHTML = `
-      <div class="panel empty" style="grid-column:1/-1">
-        <h3>The storefront is live, the API is not connected yet</h3>
-        <p class="muted">GitHub Pages serves static files only, so the Spring Boot backend runs elsewhere.</p>
-        <p class="muted">Paste your backend URL in the box above (or add <code>?api=https://your-backend</code>
-        to this page's address) and the shop loads. To make it permanent for everyone, set
-        <code>apiBase</code> in <code>docs/config.js</code>.</p>
-      </div>`;
-    return;
-  }
-
-  await loadCatalogue();
-  if (state.user) await refreshCartCount();
+  loadCatalogue();
+  if (state.user) refreshCartCount();
   show("shop");
 })();

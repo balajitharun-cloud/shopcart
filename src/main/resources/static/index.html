@@ -3,209 +3,295 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ShopCart - Online Shopping</title>
+<title>ShopCart — considered goods for everyday use</title>
+<meta name="description" content="ShopCart is a demo storefront: electronics, fashion, home, books and beauty from fictional house brands." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2314140F'/><path d='M9 12h14l-1.6 10.5a2 2 0 0 1-2 1.7H12.6a2 2 0 0 1-2-1.7L9 12Z' fill='none' stroke='%23FBFAF7' stroke-width='1.6'/><path d='M12.5 12V9.8a3.5 3.5 0 0 1 7 0V12' fill='none' stroke='%23FBFAF7' stroke-width='1.6'/></svg>" />
 </head>
 <body>
 
-<header class="topbar">
-  <div class="wrap topbar-inner">
-    <a class="brand" href="#" data-nav="shop">
-      <span class="brand-mark">🛒</span>
-      <span>Shop<strong>Cart</strong></span>
-    </a>
+<div class="announce">
+  <div class="shell announce-inner">
+    <span>Complimentary delivery over ₹999</span>
+    <span class="dot"></span>
+    <span>30-day returns</span>
+    <span class="dot"></span>
+    <span>Dispatched within 24 hours</span>
+  </div>
+</div>
 
-    <div class="searchbox">
-      <span class="search-icon">🔍</span>
-      <input id="search-input" type="search" placeholder="Search for headphones, books, serum..." autocomplete="off" />
-    </div>
+<header class="site-header">
+  <div class="shell header-inner">
+    <a class="wordmark" href="#" data-nav="shop">ShopCart</a>
 
-    <nav class="nav">
-      <button class="nav-link" data-nav="shop">Shop</button>
-      <button class="nav-link" data-nav="orders" id="nav-orders" hidden>My Orders</button>
-      <button class="nav-link" data-nav="admin" id="nav-admin" hidden>Admin</button>
-      <button class="nav-link" id="api-settings" title="Change the backend URL" hidden>⚙ API</button>
-      <button class="cart-btn" data-nav="cart">
-        Cart <span class="badge" id="cart-count">0</span>
+    <nav class="primary-nav" id="category-bar"></nav>
+
+    <div class="header-actions">
+      <label class="search">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg>
+        <input id="search-input" type="search" placeholder="Search the store" autocomplete="off" aria-label="Search products" />
+      </label>
+      <button class="ghost-btn" id="account-btn" aria-label="Account">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.2" /><path d="M3.8 17c.6-3.1 3.2-5 6.2-5s5.6 1.9 6.2 5" /></svg>
+        <span id="account-label">Sign in</span>
       </button>
-      <button class="nav-link" id="auth-btn">Log in</button>
-      <div class="account" id="account-chip" hidden>
-        <span class="avatar" id="account-initial">T</span>
-        <div class="account-meta">
-          <span id="account-name">Tharun</span>
-          <button class="link" id="logout-btn">Log out</button>
-        </div>
-      </div>
-    </nav>
+      <button class="ghost-btn bag-btn" data-nav="cart" aria-label="Bag">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.2 6.5h11.6l-1.2 9.4a1.6 1.6 0 0 1-1.6 1.4H7a1.6 1.6 0 0 1-1.6-1.4L4.2 6.5Z" /><path d="M7.6 6.5V4.9a2.4 2.4 0 0 1 4.8 0v1.6" /></svg>
+        <span class="bag-count" id="cart-count">0</span>
+      </button>
+    </div>
   </div>
 </header>
 
-<main class="wrap main">
+<main class="shell main">
   <div class="banner" id="backend-banner" hidden></div>
 
   <!-- ============ SHOP ============ -->
   <section id="view-shop" class="view">
     <div class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Free delivery over ₹999</p>
-        <h1>Everything you need,<br />delivered to your door.</h1>
-        <p class="hero-sub">Browse by category or search the catalogue. Stock is checked live before anything is added to your cart.</p>
-        <button class="btn btn-primary" data-nav="shop" id="hero-cta">Start shopping</button>
+        <p class="eyebrow">Autumn collection</p>
+        <h1>Fewer things,<br />better made.</h1>
+        <p class="lede">House-brand electronics, everyday clothing and kitchen tools — designed once, made properly, priced without the middleman.</p>
+        <div class="hero-actions">
+          <button class="btn btn-solid" data-scroll-grid>Shop the collection</button>
+          <button class="btn btn-quiet" data-nav="orders" id="hero-orders" hidden>Track an order</button>
+        </div>
+        <ul class="hero-notes">
+          <li>Free delivery over ₹999</li>
+          <li>Two-year warranty</li>
+          <li>Made in India</li>
+        </ul>
       </div>
-      <div class="hero-art">🛍️</div>
+      <div class="hero-art" id="hero-art" aria-hidden="true"></div>
     </div>
 
     <div class="section-head">
-      <h2 id="catalogue-title">All products</h2>
-      <span class="muted" id="product-count"></span>
+      <div>
+        <h2 id="catalogue-title">Shop all</h2>
+        <p class="section-note" id="product-count"></p>
+      </div>
+      <label class="sort">
+        <span>Sort</span>
+        <select id="sort-select">
+          <option value="featured">Featured</option>
+          <option value="price-asc">Price: low to high</option>
+          <option value="price-desc">Price: high to low</option>
+          <option value="rating">Top rated</option>
+          <option value="discount">Biggest saving</option>
+        </select>
+      </label>
     </div>
 
-    <div class="chips" id="category-chips"></div>
     <div class="grid" id="product-grid"></div>
-    <div class="empty" id="shop-empty" hidden>No products matched your search.</div>
+    <div class="empty" id="shop-empty" hidden>
+      <h3>No products match that search</h3>
+      <p>Try a different term, or clear the filters.</p>
+      <button class="btn btn-quiet" id="clear-filters">Clear filters</button>
+    </div>
   </section>
 
   <!-- ============ CART ============ -->
   <section id="view-cart" class="view" hidden>
-    <div class="section-head">
-      <h2>Your cart</h2>
-      <button class="link" id="continue-shopping">Continue shopping</button>
+    <div class="page-head">
+      <h1>Your bag</h1>
+      <button class="link-btn" data-nav="shop">Continue shopping</button>
     </div>
     <div class="cart-layout">
-      <div class="cart-lines" id="cart-lines"></div>
-      <aside class="bill" id="bill-panel"></aside>
+      <div id="cart-lines" class="cart-lines"></div>
+      <aside class="summary" id="bill-panel"></aside>
     </div>
   </section>
 
   <!-- ============ CHECKOUT ============ -->
   <section id="view-checkout" class="view" hidden>
-    <div class="section-head">
-      <h2>Checkout</h2>
-      <button class="link" data-nav="cart">Back to cart</button>
+    <div class="page-head">
+      <h1>Checkout</h1>
+      <button class="link-btn" data-nav="cart">Back to bag</button>
     </div>
     <div class="cart-layout">
-      <form class="panel" id="checkout-form">
-        <h3>1. Shipping address</h3>
-        <textarea id="checkout-address" rows="3" placeholder="House no, street, city, state, PIN code"></textarea>
+      <form id="checkout-form" class="stack">
+        <fieldset class="card">
+          <legend><span class="step">1</span> Delivery address</legend>
+          <div class="form-grid">
+            <label class="field"><span>Full name</span><input id="co-name" required autocomplete="name" /></label>
+            <label class="field"><span>Phone</span><input id="co-phone" required autocomplete="tel" placeholder="+91 90000 12345" /></label>
+            <label class="field wide"><span>Address</span><input id="co-line1" required autocomplete="address-line1" placeholder="Flat / house no, building, street" /></label>
+            <label class="field wide"><span>Area, landmark (optional)</span><input id="co-line2" autocomplete="address-line2" /></label>
+            <label class="field"><span>City</span><input id="co-city" required autocomplete="address-level2" /></label>
+            <label class="field"><span>PIN code</span><input id="co-pin" required autocomplete="postal-code" inputmode="numeric" maxlength="6" /></label>
+            <label class="field"><span>State</span><input id="co-state" required autocomplete="address-level1" /></label>
+          </div>
+        </fieldset>
 
-        <h3>2. Payment method</h3>
-        <div class="pay-methods" id="pay-methods">
-          <label class="pay-option"><input type="radio" name="pay" value="CARD" checked /><span>💳 Card</span></label>
-          <label class="pay-option"><input type="radio" name="pay" value="UPI" /><span>📱 UPI</span></label>
-          <label class="pay-option"><input type="radio" name="pay" value="NET_BANKING" /><span>🏦 Net Banking</span></label>
-          <label class="pay-option"><input type="radio" name="pay" value="COD" /><span>💵 Cash on Delivery</span></label>
-        </div>
+        <fieldset class="card">
+          <legend><span class="step">2</span> Payment</legend>
+          <div class="pay-list" id="pay-list">
+            <label class="pay-card"><input type="radio" name="pay" value="UPI" checked />
+              <span class="pay-body"><strong>UPI</strong><em>Google Pay, PhonePe, Paytm</em></span></label>
+            <label class="pay-card"><input type="radio" name="pay" value="CARD" />
+              <span class="pay-body"><strong>Card</strong><em>Visa, Mastercard, RuPay</em></span></label>
+            <label class="pay-card"><input type="radio" name="pay" value="NET_BANKING" />
+              <span class="pay-body"><strong>Net banking</strong><em>All major banks</em></span></label>
+            <label class="pay-card"><input type="radio" name="pay" value="COD" />
+              <span class="pay-body"><strong>Cash on delivery</strong><em>Pay the courier</em></span></label>
+          </div>
+          <label class="field" id="pay-detail-field">
+            <span id="pay-detail-label">UPI ID</span>
+            <input id="pay-detail" autocomplete="off" placeholder="yourname@okhdfcbank" />
+            <small class="hint">Test gateway — include the word <code>fail</code> to simulate a declined payment.</small>
+          </label>
+        </fieldset>
 
-        <div class="field" id="pay-detail-field">
-          <label for="pay-detail" id="pay-detail-label">Card number</label>
-          <input id="pay-detail" type="text" placeholder="4111 1111 1111 1111" autocomplete="off" />
-          <p class="hint">Demo gateway: include the word <code>fail</code> anywhere in the details to simulate a declined payment.</p>
-        </div>
-
-        <button class="btn btn-primary btn-block" type="submit" id="place-order-btn">Pay &amp; place order</button>
+        <button class="btn btn-solid btn-block" type="submit" id="place-order-btn">Pay and place order</button>
       </form>
-      <aside class="bill" id="checkout-bill"></aside>
+      <aside class="summary" id="checkout-bill"></aside>
     </div>
   </section>
 
   <!-- ============ CONFIRMATION ============ -->
   <section id="view-confirmation" class="view" hidden>
-    <div class="panel confirm" id="confirmation-panel"></div>
+    <div class="card confirm" id="confirmation-panel"></div>
   </section>
 
   <!-- ============ ORDERS ============ -->
   <section id="view-orders" class="view" hidden>
-    <div class="section-head">
-      <h2>My orders</h2>
-      <button class="link" data-nav="shop">Shop again</button>
+    <div class="page-head">
+      <h1>Orders</h1>
+      <button class="link-btn" data-nav="shop">Shop again</button>
     </div>
-    <div id="orders-list" class="orders"></div>
+    <div id="orders-list" class="stack"></div>
+  </section>
+
+  <!-- ============ ACCOUNT ============ -->
+  <section id="view-account" class="view" hidden>
+    <div class="page-head">
+      <h1>Account</h1>
+      <button class="link-btn" id="account-signout">Sign out</button>
+    </div>
+    <div class="account-grid">
+      <div class="card" id="account-profile"></div>
+      <div class="card" id="account-orders"></div>
+    </div>
+    <div class="card danger">
+      <h2>Close account</h2>
+      <p class="muted">This removes your profile, bag and order history from ShopCart. It cannot be undone.</p>
+      <div class="danger-row">
+        <label class="field"><span>Confirm with your password</span><input id="delete-password" type="password" autocomplete="current-password" /></label>
+        <button class="btn btn-danger" id="delete-account-btn">Delete my account</button>
+      </div>
+      <p class="hint" id="delete-hint"></p>
+    </div>
   </section>
 
   <!-- ============ ADMIN ============ -->
   <section id="view-admin" class="view" hidden>
-    <div class="section-head">
-      <h2>Admin dashboard</h2>
-      <span class="muted">Algorithm I - catalogue, orders and reports</span>
+    <div class="page-head">
+      <h1>Admin</h1>
+      <span class="muted" id="admin-sub">Catalogue, orders and reports</span>
     </div>
     <div class="tabs" id="admin-tabs">
-      <button class="tab active" data-tab="reports">Reports</button>
+      <button class="tab is-active" data-tab="overview">Overview</button>
       <button class="tab" data-tab="products">Products</button>
       <button class="tab" data-tab="orders">Orders</button>
     </div>
 
-    <div class="tab-panel" id="tab-reports">
-      <div class="stat-grid" id="stat-grid"></div>
+    <div class="tab-panel" id="tab-overview">
+      <div class="stat-row" id="stat-row"></div>
       <div class="two-col">
-        <div class="panel"><h3>Low stock</h3><div id="low-stock"></div></div>
-        <div class="panel"><h3>Recent orders</h3><div id="recent-orders"></div></div>
+        <div class="card"><h2>Low stock</h2><div id="low-stock"></div></div>
+        <div class="card"><h2>Recent orders</h2><div id="recent-orders"></div></div>
       </div>
     </div>
 
     <div class="tab-panel" id="tab-products" hidden>
-      <div class="panel">
-        <h3 id="product-form-title">Add product</h3>
+      <div class="card">
+        <h2 id="product-form-title">Add product</h2>
         <form id="product-form" class="form-grid">
           <input type="hidden" id="p-id" />
-          <div class="field"><label>Name</label><input id="p-name" required /></div>
-          <div class="field"><label>Price (₹)</label><input id="p-price" type="number" step="0.01" min="0" required /></div>
-          <div class="field"><label>Stock</label><input id="p-stock" type="number" min="0" required /></div>
-          <div class="field"><label>Category</label><select id="p-category"></select></div>
-          <div class="field"><label>Icon</label><input id="p-image" placeholder="📦" maxlength="4" /></div>
-          <div class="field wide"><label>Description</label><textarea id="p-description" rows="2"></textarea></div>
+          <label class="field wide"><span>Name</span><input id="p-name" required /></label>
+          <label class="field"><span>Brand</span><input id="p-brand" placeholder="Soniq" /></label>
+          <label class="field"><span>Category</span><select id="p-category"></select></label>
+          <label class="field"><span>Price (₹)</span><input id="p-price" type="number" min="0" step="0.01" required /></label>
+          <label class="field"><span>MRP (₹)</span><input id="p-mrp" type="number" min="0" step="0.01" /></label>
+          <label class="field"><span>Stock</span><input id="p-stock" type="number" min="0" required /></label>
+          <label class="field"><span>Artwork</span><select id="p-image"></select></label>
+          <label class="field"><span>Rating</span><input id="p-rating" type="number" min="0" max="5" step="0.1" /></label>
+          <label class="field"><span>Reviews</span><input id="p-reviews" type="number" min="0" /></label>
+          <label class="field wide"><span>Description</span><textarea id="p-description" rows="2"></textarea></label>
           <div class="form-actions">
-            <button class="btn btn-primary" type="submit">Save product</button>
-            <button class="btn btn-ghost" type="button" id="product-form-reset">Clear</button>
+            <button class="btn btn-solid" type="submit">Save product</button>
+            <button class="btn btn-quiet" type="button" id="product-form-reset">Clear</button>
           </div>
         </form>
       </div>
-      <div class="panel"><h3>Catalogue</h3><div id="admin-products"></div></div>
+      <div class="card"><h2>Catalogue</h2><div id="admin-products"></div></div>
     </div>
 
     <div class="tab-panel" id="tab-orders" hidden>
-      <div class="panel"><h3>All orders</h3><div id="admin-orders"></div></div>
+      <div class="card"><h2>All orders</h2><div id="admin-orders"></div></div>
     </div>
   </section>
-
 </main>
 
-<!-- ============ AUTH MODAL ============ -->
-<div class="modal-backdrop" id="auth-modal" hidden>
-  <div class="modal small">
-    <button class="modal-close" data-close="auth-modal">✕</button>
-    <div class="tabs">
-      <button class="tab active" data-auth="login">Log in</button>
-      <button class="tab" data-auth="register">Register</button>
+<footer class="site-footer">
+  <div class="shell footer-inner">
+    <div>
+      <p class="wordmark small">ShopCart</p>
+      <p class="muted">A demonstration storefront. Every brand, product and price here is fictional — the names are parodies, and nothing is for sale.</p>
     </div>
-    <form id="login-form" class="auth-form">
-      <div class="field"><label>Email</label><input id="login-email" type="email" required placeholder="tharun@example.com" /></div>
-      <div class="field"><label>Password</label><input id="login-password" type="password" required placeholder="Passw0rd" /></div>
-      <button class="btn btn-primary btn-block" type="submit">Log in</button>
-      <p class="hint">Demo accounts: tharun@example.com / Passw0rd &nbsp;·&nbsp; admin@shopcart.in / Admin@123</p>
+    <div class="footer-meta">
+      <p>Built with Spring Boot and a static frontend.</p>
+      <p class="muted" id="footer-api"></p>
+    </div>
+  </div>
+</footer>
+
+<!-- ============ AUTH ============ -->
+<div class="sheet-backdrop" id="auth-modal" hidden>
+  <div class="sheet narrow">
+    <button class="sheet-close" data-close="auth-modal" aria-label="Close">Close</button>
+    <div class="tabs auth-tabs">
+      <button class="tab is-active" data-auth="login">Sign in</button>
+      <button class="tab" data-auth="register">Create account</button>
+    </div>
+
+    <form id="login-form" class="stack">
+      <h2>Welcome back</h2>
+      <label class="field"><span>Email</span><input id="login-email" type="email" required autocomplete="email" placeholder="you@example.com" /></label>
+      <label class="field"><span>Password</span><input id="login-password" type="password" required autocomplete="current-password" /></label>
+      <button class="btn btn-solid btn-block" type="submit">Sign in</button>
+      <p class="hint">Demo customer: tharun@example.com / Passw0rd · Admin: admin@shopcart.in / Admin@123</p>
     </form>
-    <form id="register-form" class="auth-form" hidden>
-      <div class="field"><label>Name</label><input id="reg-name" required /></div>
-      <div class="field"><label>Email</label><input id="reg-email" type="email" required /></div>
-      <div class="field"><label>Phone</label><input id="reg-phone" required placeholder="+91 90000 12345" /></div>
-      <div class="field"><label>Password</label><input id="reg-password" type="password" required minlength="6" /></div>
-      <div class="field"><label>Address</label><textarea id="reg-address" rows="2" required></textarea></div>
-      <button class="btn btn-primary btn-block" type="submit">Create account</button>
+
+    <form id="register-form" class="stack" hidden>
+      <h2>Create your account</h2>
+      <label class="field"><span>Full name</span><input id="reg-name" required autocomplete="name" /></label>
+      <label class="field"><span>Email</span><input id="reg-email" type="email" required autocomplete="email" /></label>
+      <label class="field"><span>Phone</span><input id="reg-phone" required autocomplete="tel" placeholder="+91 90000 12345" /></label>
+      <label class="field"><span>Password</span><input id="reg-password" type="password" required minlength="6" autocomplete="new-password" /></label>
+      <label class="field"><span>Delivery address</span><textarea id="reg-address" rows="2" required></textarea></label>
+      <button class="btn btn-solid btn-block" type="submit">Create account</button>
+      <p class="hint">You can delete your account at any time from the account page.</p>
     </form>
   </div>
 </div>
 
-<!-- ============ PRODUCT MODAL ============ -->
-<div class="modal-backdrop" id="product-modal" hidden>
-  <div class="modal">
-    <button class="modal-close" data-close="product-modal">✕</button>
+<!-- ============ PRODUCT ============ -->
+<div class="sheet-backdrop" id="product-modal" hidden>
+  <div class="sheet wide">
+    <button class="sheet-close" data-close="product-modal" aria-label="Close">Close</button>
     <div id="product-detail"></div>
   </div>
 </div>
 
-<div class="toast-wrap" id="toast-wrap"></div>
+<div class="toast-stack" id="toast-wrap" aria-live="polite"></div>
 
 <script src="config.js"></script>
+<script src="art.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

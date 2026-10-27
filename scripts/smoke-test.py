@@ -210,6 +210,22 @@ def main():
         call("POST", f"/api/orders/{order['orderCode']}/cancel", token=token, expect=409,
              label="cannot cancel a shipped order")
 
+        # ---- account closure ----
+        call("POST", "/api/auth/register", {
+            "name": "Delete Me", "email": "delete.me@test.in", "phone": "+91 90000 22222",
+            "password": "Secret123", "address": "9 Test Lane, Bengaluru 560001",
+        }, expect=200, label="register a throwaway account")
+        throwaway = call("POST", "/api/auth/login",
+                         {"email": "delete.me@test.in", "password": "Secret123"}, label="throwaway login")
+        call("DELETE", "/api/auth/account", {"password": "nope"}, token=throwaway["token"],
+             expect=403, label="delete needs the right password")
+        call("DELETE", "/api/auth/account", {"password": "Secret123"}, token=throwaway["token"],
+             expect=200, label="account deleted")
+        call("POST", "/api/auth/login", {"email": "delete.me@test.in", "password": "Secret123"},
+             expect=401, label="deleted account cannot log in")
+        call("DELETE", "/api/auth/account", {"password": "Admin@123"}, token=atoken,
+             expect=409, label="last admin cannot delete itself")
+
         # ---- logout ----
         call("POST", "/api/auth/logout", token=token, label="logout")
         call("GET", "/api/orders", token=token, expect=401, label="token invalid after logout")

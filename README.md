@@ -13,6 +13,27 @@ console errors.
 
 ---
 
+## Storefront
+
+A single-page storefront in `src/main/resources/static` (mirrored to `docs/` for GitHub Pages),
+served by Spring Boot or hosted statically:
+
+- **Editorial retail design** — warm paper ground, ink type, one deep green accent, Fraunces for
+  display and Inter for UI. No icon fonts, no frameworks, no CDN dependency except Google Fonts
+  (with a system serif fallback if it is blocked).
+- **Product artwork is inline SVG** (`art.js`), drawn per product rather than emoji, so cards stay
+  sharp at any size and nothing depends on an image host.
+- **Realistic catalogue** — brands, list price (MRP) with strike-through and discount percentage,
+  ratings with review counts, stock badges and sort options.
+- **Account flows** — sign in, create account (from the same sheet, no page reload) and **delete
+  account** from the account page, re-confirmed with the password.
+- Cart, coupon, checkout with a structured address form, order confirmation with a status timeline,
+  order history with cancellation, and an admin area (overview, product CRUD, order status).
+
+> Every brand in the seed data is a **fictional parody** invented for this demo (`Soniq`, `Pome`,
+> `Samsun`, `Nyke`, `Adibas`-style names and so on). No real company makes or endorses these
+> products; nothing here is for sale.
+
 ## Quick start
 
 ```bash
@@ -114,6 +135,7 @@ back from `/api/auth/login` and lasts 24 hours).
 | POST | `/api/auth/register` | Algorithm B |
 | POST | `/api/auth/login` | Algorithm C, returns `{token, user}` |
 | POST | `/api/auth/logout` | Destroy the session |
+| DELETE | `/api/auth/account` | Close the account — body `{password}`; removes profile, cart and orders |
 | GET | `/api/auth/me` | Current user |
 | GET | `/api/config` | Public tax / shipping / support settings |
 | GET | `/api/catalog/categories` | Categories |
