@@ -1,5 +1,7 @@
 # ShopCart - Online Shopping Cart
 
+**Live:** storefront → https://balajitharun-cloud.github.io/shopcart/ · API → https://shopcart-api-2y3b.onrender.com
+
 A complete online shopping cart web application built from the plain-text algorithm
 (`A. Main algorithm` through `I. Admin algorithm`): **Java 17 + Spring Boot 3** REST backend,
 embedded **H2** database, and a dependency-free **HTML/CSS/JS** storefront served by the same app.
