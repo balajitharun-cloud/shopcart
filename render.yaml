@@ -1,0 +1,17 @@
+# Render blueprint - https://render.com/docs/blueprint-spec
+# Deploy: push this repo, then in Render choose "New > Blueprint" and point it at the repo.
+services:
+  - type: web
+    name: shopcart-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/config
+    envVars:
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://balajitharun-cloud.github.io
+      # Free instances have an ephemeral filesystem, so the H2 file is lost on redeploy.
+      # For durable data, create a Render PostgreSQL instance and set:
+      #   SPRING_DATASOURCE_URL      jdbc:postgresql://<host>/<db>
+      #   SPRING_DATASOURCE_USERNAME <user>
+      #   SPRING_DATASOURCE_PASSWORD <password>
