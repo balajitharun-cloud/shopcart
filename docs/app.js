@@ -6,6 +6,8 @@ const STATUS_FLOW = ["PLACED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DEL
    from docs/config.js instead of being hardcoded. Empty = same origin (Spring Boot serves it). */
 const CONFIG = window.SHOPCART_CONFIG || {};
 const API_BASE = String(CONFIG.apiBase || "").replace(/\/+$/, "");
+/* True when this page is served by a static host (GitHub Pages) rather than by Spring Boot. */
+const STATIC_HOST = CONFIG.staticHost === true;
 const PAY_LABELS = { CARD: "Card", UPI: "UPI", NET_BANKING: "Net Banking", COD: "Cash on Delivery" };
 
 const state = {
@@ -49,11 +51,18 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
   }
 
   const raw = await response.text();
+  const isJson = (response.headers.get("content-type") || "").includes("json");
   let data = null;
-  try { data = raw ? JSON.parse(raw) : null; } catch (_) { data = { message: raw }; }
+  if (raw && isJson) {
+    try { data = JSON.parse(raw); } catch (_) { data = null; }
+  }
 
   if (!response.ok) {
-    const error = new Error((data && data.message) || "Something went wrong");
+    const fallback =
+      response.status === 404
+        ? "API endpoint not found. Check that apiBase in docs/config.js points at the ShopCart backend."
+        : "Request failed (" + response.status + ").";
+    const error = new Error((data && data.message) || fallback);
     error.status = response.status;
     if (response.status === 401 && auth && state.token) {
       clearSession();
@@ -924,12 +933,24 @@ function showBackendBanner(message) {
 
 (async function boot() {
   renderSession();
-  if (!API_BASE && location.protocol.startsWith("http") && location.port !== "8080") {
+
+  if (STATIC_HOST && !API_BASE) {
     showBackendBanner(
-      "<strong>Static demo:</strong> this page is hosted on GitHub Pages and the Spring Boot API is not connected yet. " +
-      "Set <code>apiBase</code> in <code>docs/config.js</code> to your deployed backend URL."
+      "<strong>Backend not connected.</strong> This storefront is hosted on GitHub Pages and needs the " +
+      "ShopCart API. Set <code>apiBase</code> in <code>docs/config.js</code> to your deployed backend URL."
     );
+    $("category-chips").innerHTML = "";
+    $("product-count").textContent = "";
+    $("product-grid").innerHTML = `
+      <div class="panel empty" style="grid-column:1/-1">
+        <h3>The storefront is live, the API is not connected yet</h3>
+        <p class="muted">GitHub Pages serves static files only, so the Spring Boot backend runs elsewhere.</p>
+        <p class="muted">Deploy it (the repo has a <code>Dockerfile</code> and a <code>render.yaml</code>), then put its
+        URL in <code>docs/config.js</code> as <code>apiBase</code> and reload this page.</p>
+      </div>`;
+    return;
   }
+
   await loadCatalogue();
   if (state.user) await refreshCartCount();
   show("shop");

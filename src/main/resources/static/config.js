@@ -10,4 +10,5 @@
  */
 window.SHOPCART_CONFIG = {
   apiBase: "",
+  staticHost: false,
 };

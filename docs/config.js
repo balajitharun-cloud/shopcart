@@ -8,4 +8,6 @@
  */
 window.SHOPCART_CONFIG = {
   apiBase: "",
+  // true = this page is served by a static host, so an empty apiBase means "not connected yet"
+  staticHost: true,
 };
