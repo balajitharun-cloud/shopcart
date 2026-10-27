@@ -248,12 +248,31 @@ $("logout-btn").addEventListener("click", async () => {
 
 /* ------------------------------ catalogue ------------------------------ */
 
-async function loadCatalogue() {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Loads categories + products. Free hosts (Render, Railway) sleep when idle, so the first
+ * request after a nap fails for up to a minute while the container boots - retry instead of
+ * telling the user the backend is broken.
+ */
+async function loadCatalogue(attempt = 1) {
   try {
     state.categories = await api("/catalog/categories", { auth: false });
     renderChips();
     await loadProducts();
+    if (STATIC_HOST) {
+      $("backend-banner").hidden = true;
+    }
   } catch (error) {
+    const retryable = !error.status || error.status >= 500;
+    if (retryable && attempt <= 3 && STATIC_HOST) {
+      showBackendBanner(
+        "<strong>Waking the backend&hellip;</strong> free hosts sleep when idle, so the first request can " +
+        "take up to a minute. Retrying (" + attempt + "/3)."
+      );
+      await sleep(4000 * attempt);
+      return loadCatalogue(attempt + 1);
+    }
     toast(error.message, "error");
     if (STATIC_HOST) {
       showBackendBanner("<strong>Could not load the catalogue.</strong> " + esc(error.message) +
