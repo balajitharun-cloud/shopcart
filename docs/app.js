@@ -55,9 +55,14 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
       body: body === null ? undefined : JSON.stringify(body),
     });
   } catch (networkError) {
+    const codespaceHint = /\.app\.github\.dev\/?$/.test(API_BASE)
+      ? " Note: a GitHub Codespaces URL cannot serve a separate site - GitHub puts a consent page in"
+        + " front of the port and browsers block that for cross-origin requests. Open the codespace URL"
+        + " directly instead (Spring Boot serves the storefront itself), or use a dedicated host."
+      : "";
     throw new Error(
       API_BASE
-        ? "Cannot reach the API at " + API_BASE + ". Is the backend running and is CORS configured for this origin?"
+        ? "Cannot reach the API at " + API_BASE + ". Is the backend running and is CORS configured for this origin?" + codespaceHint
         : "No API configured. Set apiBase in docs/config.js to your deployed ShopCart backend."
     );
   }
@@ -69,11 +74,18 @@ async function api(path, { method = "GET", body = null, auth = true } = {}) {
     try { data = JSON.parse(raw); } catch (_) { data = null; }
   }
 
-  if (!response.ok) {
-    const fallback =
-      response.status === 404
-        ? "API endpoint not found. Check that apiBase in docs/config.js points at the ShopCart backend."
-        : "Request failed (" + response.status + ").";
+  if (!response.ok || !isJson) {
+    let fallback;
+    if (response.ok && !isJson) {
+      // A 200 that is not JSON is almost always a captive/consent page in front of the API.
+      fallback = "The backend replied with a web page instead of JSON. A GitHub Codespaces URL shows a "
+        + "one-time 'Codespaces Access Port' consent page - open the URL in a tab, accept it, then reload. "
+        + "A dedicated host (Render/Railway) does not do this.";
+    } else if (response.status === 404) {
+      fallback = "API endpoint not found. Check that apiBase points at the ShopCart backend.";
+    } else {
+      fallback = "Request failed (" + response.status + ").";
+    }
     const error = new Error((data && data.message) || fallback);
     error.status = response.status;
     if (response.status === 401 && auth && state.token) {
