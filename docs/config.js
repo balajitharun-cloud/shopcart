@@ -7,7 +7,7 @@
  * Leave it empty to fall back to same-origin (only works when Spring Boot serves this page).
  */
 window.SHOPCART_CONFIG = {
-  apiBase: "https://solitary-fishsticks-7v654x5v9ww53w59-8080.app.github.dev",
+  apiBase: "https://shopcart-api-2y3b.onrender.com",
   // true = this page is served by a static host, so an empty apiBase means "not connected yet"
   staticHost: true,
 };
