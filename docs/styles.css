@@ -169,6 +169,10 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px
 }
 .card-art svg { width: 74%; height: auto; transition: transform .4s cubic-bezier(.2,.7,.3,1); }
 .card-product:hover .card-art svg { transform: scale(1.04); }
+.card-art img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s cubic-bezier(.2,.7,.3,1); }
+.card-product:hover .card-art img { transform: scale(1.03); }
+.hero-art img, .pd-art img, .line-art img, .oi-art img, .cell-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pd-art, .card-art, .line-art, .oi-art, .cell-art, .hero-art { overflow: hidden; }
 .tag {
   position: absolute; top: 12px; left: 12px; background: var(--surface); color: var(--ink);
   font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; padding: 4px 8px; border-radius: 2px;

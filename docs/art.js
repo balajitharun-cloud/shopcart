@@ -2,6 +2,11 @@
    Flat illustrations on a transparent ground so the card background shows through.
    Keys match Product.image; unknown keys fall back to "package". */
 
+/* Products that ship a real photograph in assets/products/. Everything else falls back to
+   the inline illustrations below. */
+const PHOTO_KEYS = ["laptop", "phone", "watch", "headphones", "charger", "keyboard",
+  "sneakers", "tshirt", "bottle", "containers", "skillet", "books"];
+
 const ART_KEYS = [
   ["headphones", "Headphones"], ["watch", "Watch"], ["charger", "Charger"],
   ["keyboard", "Keyboard"], ["sneakers", "Sneakers"], ["jeans", "Jeans"],
@@ -129,6 +134,14 @@ const ART = {
     <path d="M100 96v78M36 66l64 30 64-30" fill="none" stroke="${INK}" stroke-width="4" opacity=".45"/>
     <rect x="88" y="40" width="24" height="52" fill="${ACCENT}" opacity=".75"/>`,
 };
+
+/** Card/sheet media: a photo when we have one, otherwise the inline illustration. */
+function productMedia(key) {
+  if (PHOTO_KEYS.includes(key)) {
+    return `<img src="assets/products/${key}.webp" alt="" loading="lazy" width="800" height="1000" />`;
+  }
+  return productArt(key);
+}
 
 function productArt(key) {
   const body = ART[key] || ART.package;

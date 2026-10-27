@@ -361,7 +361,7 @@ function renderProducts() {
           <button class="quick-add" data-add="${p.id}" ${out ? "disabled" : ""}>
             ${out ? "Sold out" : "Add to bag"}
           </button>
-          ${productArt(p.image)}
+          ${productMedia(p.image)}
         </div>
         <div class="card-body">
           <span class="card-brand">${esc(p.brand || "ShopCart")}</span>
@@ -421,7 +421,7 @@ async function openProduct(id) {
     const out = p.stock === 0;
     $("product-detail").innerHTML = `
       <div class="pd">
-        <div class="pd-art">${productArt(p.image)}</div>
+        <div class="pd-art">${productMedia(p.image)}</div>
         <div>
           <p class="pd-brand">${esc(p.brand || "ShopCart")} · ${esc(p.category)}</p>
           <h2>${esc(p.name)}</h2>
@@ -529,7 +529,7 @@ function renderCart(bill) {
     .map(
       (line) => `
       <div class="line">
-        <div class="line-art">${productArt(line.image)}</div>
+        <div class="line-art">${productMedia(line.image)}</div>
         <div class="line-main">
           <span class="line-brand">${esc(line.brand || "")}</span>
           <span class="line-name">${esc(line.name)}</span>
@@ -779,7 +779,7 @@ async function loadOrders() {
               .map(
                 (item) => `
               <div class="order-item">
-                <span class="oi-left"><span class="oi-art">${productArt(item.image)}</span>${esc(item.name)} × ${item.quantity}</span>
+                <span class="oi-left"><span class="oi-art">${productMedia(item.image)}</span>${esc(item.name)} × ${item.quantity}</span>
                 <span>${money(item.lineTotal)}</span>
               </div>`
               )
@@ -921,14 +921,18 @@ async function loadAdminProducts() {
     const [products, categories] = await Promise.all([api("/admin/products"), api("/admin/categories")]);
     state.categories = categories;
     $("p-category").innerHTML = categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
-    $("p-image").innerHTML = ART_KEYS.map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
+    const artOptions = [
+      ...PHOTO_KEYS.map((k) => [k, "Photo · " + k]),
+      ...ART_KEYS.filter(([k]) => !PHOTO_KEYS.includes(k)).map(([k, label]) => [k, "Illustration · " + label]),
+    ];
+    $("p-image").innerHTML = artOptions.map(([k, label]) => `<option value="${k}">${label}</option>`).join("");
 
     $("admin-products").innerHTML = `
       <table>
         <thead><tr><th>Product</th><th>Brand</th><th>Price</th><th>Stock</th><th>Rating</th><th></th></tr></thead>
         <tbody>${products.map((p) => `
           <tr>
-            <td><span class="cell-product"><span class="cell-art">${productArt(p.image)}</span>${esc(p.name)}</span></td>
+            <td><span class="cell-product"><span class="cell-art">${productMedia(p.image)}</span>${esc(p.name)}</span></td>
             <td>${esc(p.brand || "ShopCart")}</td>
             <td>${money(p.price)}</td>
             <td>${p.stock}</td>
@@ -1068,7 +1072,7 @@ async function loadAdminOrders() {
 
 (function boot() {
   renderSession();
-  $("hero-art").innerHTML = productArt("headphones");
+  $("hero-art").innerHTML = productMedia("laptop");
   $("footer-api").textContent = API_BASE ? "API: " + API_BASE : "API: not configured";
 
   if (STATIC_HOST) {

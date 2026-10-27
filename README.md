@@ -21,8 +21,11 @@ served by Spring Boot or hosted statically:
 - **Editorial retail design** — warm paper ground, ink type, one deep green accent, Fraunces for
   display and Inter for UI. No icon fonts, no frameworks, no CDN dependency except Google Fonts
   (with a system serif fallback if it is blocked).
-- **Product artwork is inline SVG** (`art.js`), drawn per product rather than emoji, so cards stay
-  sharp at any size and nothing depends on an image host.
+- **Real product photography.** Twelve products use freely licensed photographs from Wikimedia
+  Commons (`assets/products/*.webp`), cropped to a 4:5 frame and stamped with a small parody brand
+  mark. Sources, authors and licences are listed in [PHOTO-CREDITS.md](PHOTO-CREDITS.md). The three
+  products without a usable free photo (jeans, serum, sunscreen) fall back to the inline SVG
+  illustrations in `art.js`, so the grid never shows a broken image.
 - **Realistic catalogue** — brands, list price (MRP) with strike-through and discount percentage,
   ratings with review counts, stock badges and sort options.
 - **Account flows** — sign in, create account (from the same sheet, no page reload) and **delete
