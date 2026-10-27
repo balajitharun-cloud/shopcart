@@ -364,9 +364,9 @@ function renderProducts() {
           ${productArt(p.image)}
         </div>
         <div class="card-body">
-          <span class="card-brand">${esc(p.brand)}</span>
+          <span class="card-brand">${esc(p.brand || "ShopCart")}</span>
           <span class="card-name" data-open="${p.id}">${esc(p.name)}</span>
-          <div class="rating">${starsSvg(p.rating)}<span>${p.rating.toFixed(1)} · ${p.reviewCount} reviews</span></div>
+          <div class="rating">${starsSvg(p.rating)}<span>${Number(p.rating || 0).toFixed(1)} · ${p.reviewCount || 0} reviews</span></div>
           <div class="price-row">
             <span class="price">${money(p.price)}</span>
             ${off > 0 ? `<span class="mrp">${money(p.mrp)}</span><span class="off">${off}% off</span>` : ""}
@@ -423,9 +423,9 @@ async function openProduct(id) {
       <div class="pd">
         <div class="pd-art">${productArt(p.image)}</div>
         <div>
-          <p class="pd-brand">${esc(p.brand)} · ${esc(p.category)}</p>
+          <p class="pd-brand">${esc(p.brand || "ShopCart")} · ${esc(p.category)}</p>
           <h2>${esc(p.name)}</h2>
-          <div class="rating">${starsSvg(p.rating)}<span>${p.rating.toFixed(1)} · ${p.reviewCount} reviews</span></div>
+          <div class="rating">${starsSvg(p.rating)}<span>${Number(p.rating || 0).toFixed(1)} · ${p.reviewCount || 0} reviews</span></div>
           <div class="pd-price">
             <span class="price">${money(p.price)}</span>
             ${off > 0 ? `<span class="mrp">${money(p.mrp)}</span><span class="off">${off}% off</span>` : ""}
@@ -929,10 +929,10 @@ async function loadAdminProducts() {
         <tbody>${products.map((p) => `
           <tr>
             <td><span class="cell-product"><span class="cell-art">${productArt(p.image)}</span>${esc(p.name)}</span></td>
-            <td>${esc(p.brand)}</td>
+            <td>${esc(p.brand || "ShopCart")}</td>
             <td>${money(p.price)}</td>
             <td>${p.stock}</td>
-            <td>${p.rating.toFixed(1)}</td>
+            <td>${Number(p.rating || 0).toFixed(1)}</td>
             <td class="row-actions">
               <button class="btn btn-quiet btn-sm" data-edit="${p.id}">Edit</button>
               <button class="btn btn-quiet btn-sm" data-delete="${p.id}">Delete</button>
