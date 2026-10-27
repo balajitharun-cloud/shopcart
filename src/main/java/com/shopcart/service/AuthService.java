@@ -10,6 +10,8 @@ import com.shopcart.repo.CartItemRepository;
 import com.shopcart.repo.OrderEventRepository;
 import com.shopcart.repo.OrderRepository;
 import com.shopcart.repo.PaymentRepository;
+import com.shopcart.repo.ReviewRepository;
+import com.shopcart.repo.WishlistRepository;
 import com.shopcart.repo.SessionTokenRepository;
 import com.shopcart.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +38,8 @@ public class AuthService {
     private final OrderRepository orders;
     private final OrderEventRepository orderEvents;
     private final PaymentRepository payments;
+    private final ReviewRepository reviews;
+    private final WishlistRepository wishlist;
 
     @Value("${app.auth.max-login-attempts:3}")
     private int maxLoginAttempts;
@@ -48,7 +52,8 @@ public class AuthService {
 
     public AuthService(UserRepository users, SessionTokenRepository sessions, PasswordEncoder passwordEncoder,
                        CartItemRepository cartItems, OrderRepository orders,
-                       OrderEventRepository orderEvents, PaymentRepository payments) {
+                       OrderEventRepository orderEvents, PaymentRepository payments,
+                       ReviewRepository reviews, WishlistRepository wishlist) {
         this.users = users;
         this.sessions = sessions;
         this.passwordEncoder = passwordEncoder;
@@ -56,6 +61,8 @@ public class AuthService {
         this.orders = orders;
         this.orderEvents = orderEvents;
         this.payments = payments;
+        this.reviews = reviews;
+        this.wishlist = wishlist;
     }
 
     /** Algorithm B. */
@@ -182,6 +189,8 @@ public class AuthService {
             orders.deleteAll(owned); // order items cascade with the order
         }
         cartItems.deleteByUserId(user.getId());
+        reviews.deleteByUserId(user.getId());
+        wishlist.deleteByUserId(user.getId());
         sessions.deleteByUserId(user.getId());
         users.delete(user);
 

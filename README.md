@@ -30,8 +30,21 @@ served by Spring Boot or hosted statically:
   ratings with review counts, stock badges and sort options.
 - **Account flows** — sign in, create account (from the same sheet, no page reload) and **delete
   account** from the account page, re-confirmed with the password.
-- Cart, coupon, checkout with a structured address form, order confirmation with a status timeline,
-  order history with cancellation, and an admin area (overview, product CRUD, order status).
+- **Deep-linkable routes** — `#/shop`, `#/product/{id}`, `#/cart`, `#/wishlist`, `#/orders`,
+  `#/account`, `#/admin`. The back button works, and a product URL can be shared.
+- **Product pages** with breadcrumbs, a PIN-code delivery estimator ("Delivering to 560001 by
+  Sat, 31 Oct · Free delivery"), stock and returns facts, ratings with a distribution breakdown,
+  written reviews, a review form for signed-in customers, and a "You may also like" rail.
+- **Wishlist** (`wishlist_items` table, `/api/wishlist`), heart buttons on every card, a wishlist
+  page, and "save for later" straight from the bag.
+- **Discovery** — brand / price / rating / in-stock filters, five sort orders, and search
+  suggestions with thumbnails. A "Recently viewed" rail is kept in the browser.
+- **Bag and checkout** — a mini-bag drawer on add, free-delivery progress, coupon codes, a
+  structured address form, order confirmation with a status timeline, order history and
+  cancellation.
+- **Reviews** are real records (`reviews` table) with a rating aggregate kept in step with the
+  cards, and closing your account removes your reviews and wishlist too.
+- **Footer** with shop / help / company columns, newsletter capture (demo only) and payment badges.
 
 > Every brand in the seed data is a **fictional parody** invented for this demo (`Soniq`, `Pome`,
 > `Samsun`, `Nyke`, `Adibas`-style names and so on). No real company makes or endorses these

@@ -210,6 +210,24 @@ def main():
         call("POST", f"/api/orders/{order['orderCode']}/cancel", token=token, expect=409,
              label="cannot cancel a shipped order")
 
+        # ---- reviews (public read, auth write) ----
+        rev = call("GET", f"/api/catalog/products/{headphones['id']}/reviews", label="reviews listed")
+        call("POST", f"/api/products/{headphones['id']}/reviews",
+             {"rating": 5, "title": "Superb", "body": "Test review body"}, token=token,
+             label="customer writes a review")
+        call("POST", f"/api/products/{headphones['id']}/reviews",
+             {"rating": 9, "title": "Bad rating"}, token=token, expect=400, label="rating must be 1-5")
+        call("POST", f"/api/products/{headphones['id']}/reviews",
+             {"rating": 4, "title": "Anon"}, expect=401, label="review needs a session")
+
+        # ---- wishlist ----
+        call("POST", f"/api/wishlist/{headphones['id']}", token=token, label="save to wishlist")
+        wish = call("GET", "/api/wishlist", token=token, label="wishlist listed")
+        assert any(p["id"] == headphones["id"] for p in wish), wish
+        call("DELETE", f"/api/wishlist/{headphones['id']}", token=token, label="remove from wishlist")
+        wish2 = call("GET", "/api/wishlist", token=token, label="wishlist empty again")
+        assert not wish2, wish2
+
         # ---- account closure ----
         call("POST", "/api/auth/register", {
             "name": "Delete Me", "email": "delete.me@test.in", "phone": "+91 90000 22222",

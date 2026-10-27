@@ -87,5 +87,13 @@ public final class Dtos {
 
     public record MessageResponse(String message) { }
 
+    // ---------- reviews and wishlist ----------
+
+    public record ReviewView(Long id, String author, int rating, String title, String body, String createdAt) { }
+
+    public record ReviewSummary(double average, long count, int[] distribution, List<ReviewView> reviews) { }
+
+    public record ReviewRequest(Integer rating, String title, String body) { }
+
     public record DeleteAccountRequest(@NotBlank(message = "is required") String password) { }
 }

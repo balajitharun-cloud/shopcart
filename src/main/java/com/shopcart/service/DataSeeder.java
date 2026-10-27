@@ -1,12 +1,14 @@
 package com.shopcart.service;
 
 import com.shopcart.model.Category;
+import com.shopcart.model.Review;
 import com.shopcart.model.CouponType;
 import com.shopcart.model.Product;
 import com.shopcart.model.Role;
 import com.shopcart.model.User;
 import com.shopcart.repo.CategoryRepository;
 import com.shopcart.repo.ProductRepository;
+import com.shopcart.repo.ReviewRepository;
 import com.shopcart.repo.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,14 +38,16 @@ public class DataSeeder implements SmartInitializingSingleton {
     private final CategoryRepository categories;
     private final ProductRepository products;
     private final UserRepository users;
+    private final ReviewRepository reviews;
     private final AdminService adminService;
     private final PasswordEncoder passwordEncoder;
 
     public DataSeeder(CategoryRepository categories, ProductRepository products, UserRepository users,
-                      AdminService adminService, PasswordEncoder passwordEncoder) {
+                      ReviewRepository reviews, AdminService adminService, PasswordEncoder passwordEncoder) {
         this.categories = categories;
         this.products = products;
         this.users = users;
+        this.reviews = reviews;
         this.adminService = adminService;
         this.passwordEncoder = passwordEncoder;
     }
@@ -53,9 +57,43 @@ public class DataSeeder implements SmartInitializingSingleton {
     public void afterSingletonsInstantiated() {
         seedUsers();
         seedCatalogue();
+        seedReviews();
         adminService.seedCoupon("WELCOME10", CouponType.PERCENT, new BigDecimal("10"), new BigDecimal("0"));
         adminService.seedCoupon("FLAT100", CouponType.FLAT, new BigDecimal("100"), new BigDecimal("999"));
         log.info("Seed data ready. Admin: admin@shopcart.in / Admin@123 | Customer: tharun@example.com / Passw0rd");
+    }
+
+    /** A handful of written reviews per product; the card still shows the lifetime rating count. */
+    private void seedReviews() {
+        if (reviews.count() > 0) {
+            return;
+        }
+        String[][] authors = {
+                {"Aarav Menon", "Ananya Iyer"}, {"Rohit Sharma", "Meera Nair"},
+                {"Kabir Rao", "Divya Pillai"}, {"Ishaan Gupta", "Sneha Kulkarni"},
+        };
+        String[] titles = {"Exactly what I hoped for", "Worth the price", "Solid, with one niggle", "Bought a second one"};
+        String[] bodies = {
+                "Arrived a day early and the packaging was immaculate. Build quality feels a step above what I expected at this price.",
+                "Been using it daily for three weeks now. No complaints at all, and it looks better in person than in the photos.",
+                "Does the job well. Docked one star because the manual is thin, but the product itself is great.",
+                "Second purchase from ShopCart and the experience was just as smooth. Delivery was quick and the item was sealed.",
+        };
+        int index = 0;
+        for (Product product : products.findAll()) {
+            int base = (int) Math.round(product.getRating());
+            for (int i = 0; i < 3; i++) {
+                Review review = new Review();
+                review.setProductId(product.getId());
+                review.setAuthorName(authors[index % authors.length][i % 2]);
+                review.setRating(Math.max(3, Math.min(5, base + (i == 2 ? -1 : 0))));
+                review.setTitle(titles[(index + i) % titles.length]);
+                review.setBody(bodies[(index + i) % bodies.length]);
+                reviews.save(review);
+                index++;
+            }
+        }
+        log.info("Seeded written reviews for {} products", products.count());
     }
 
     private void seedUsers() {
