@@ -1,0 +1,26 @@
+# Render's free instances sleep after ~15 minutes idle, so the first visitor waits 30-60s
+# (or sees a blank page). This pings the health endpoint on a schedule to keep it awake.
+# Runs are free on public repositories.
+name: keep-warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay a few minutes under load)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API
+        run: |
+          URL="${{ vars.SHOPCART_API_URL || 'https://shopcart-api-2y3b.onrender.com' }}"
+          echo "Pinging $URL/api/config"
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /tmp/out.json -w "%{http_code}" --max-time 90 "$URL/api/config" || true)
+            echo "attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then cat /tmp/out.json; echo; exit 0; fi
+            sleep 20
+          done
+          echo "Service did not answer in time - check the Render dashboard."
+          exit 1

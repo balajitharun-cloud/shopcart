@@ -250,7 +250,9 @@ instead of failing silently. `docs/config.js` is the only file that needs to cha
 3. Note the service URL (`https://shopcart-api.onrender.com`) and put it in `docs/config.js`.
 
 Free instances sleep after ~15 minutes of inactivity, so the first request afterwards takes
-20-30 seconds. Their filesystem is ephemeral - the H2 file is lost on redeploy. For durable data,
+20-60 seconds - and while it boots the URL can look dead. `.github/workflows/keep-warm.yml`
+pings `/api/config` every ten minutes to keep it awake (free on public repositories; set a
+repository variable `SHOPCART_API_URL` if your service URL changes). Their filesystem is ephemeral - the H2 file is lost on redeploy. For durable data,
 attach a Render PostgreSQL instance and set `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`
 and `SPRING_DATASOURCE_PASSWORD` (Hibernate creates the schema on first boot).
 
