@@ -5,7 +5,17 @@ const STATUS_FLOW = ["PLACED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DEL
 /* The storefront is also published as a static site (GitHub Pages), so the API host comes
    from docs/config.js instead of being hardcoded. Empty = same origin (Spring Boot serves it). */
 const CONFIG = window.SHOPCART_CONFIG || {};
-const API_BASE = String(CONFIG.apiBase || "").replace(/\/+$/, "");
+
+/* API host resolution, highest priority first:
+   1. ?api=https://host      (try a backend without editing anything)
+   2. localStorage "shopcart.apiBase"  (set by the "Connect backend" box)
+   3. docs/config.js apiBase (the value baked into the deploy)
+   4. same origin (Spring Boot is serving this page) */
+const API_OVERRIDE =
+  new URLSearchParams(location.search).get("api") ||
+  localStorage.getItem("shopcart.apiBase") ||
+  "";
+const API_BASE = String(CONFIG.apiBase || API_OVERRIDE || "").replace(/\/+$/, "");
 /* True when this page is served by a static host (GitHub Pages) rather than by Spring Boot. */
 const STATIC_HOST = CONFIG.staticHost === true;
 const PAY_LABELS = { CARD: "Card", UPI: "UPI", NET_BANKING: "Net Banking", COD: "Cash on Delivery" };
@@ -927,8 +937,27 @@ async function loadAdminOrders() {
 
 function showBackendBanner(message) {
   const banner = $("backend-banner");
-  banner.innerHTML = message;
+  banner.innerHTML =
+    "<div>" + message + "</div>" +
+    `<div class="banner-form">
+       <input id="api-url" type="url" placeholder="https://your-backend.onrender.com" />
+       <button class="btn btn-primary btn-sm" id="api-connect">Connect</button>
+     </div>`;
   banner.hidden = false;
+
+  const connect = () => {
+    const value = $("api-url").value.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//.test(value)) {
+      toast("Enter a full URL starting with https://", "error");
+      return;
+    }
+    localStorage.setItem("shopcart.apiBase", value);
+    location.reload();
+  };
+  $("api-connect").addEventListener("click", connect);
+  $("api-url").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); connect(); }
+  });
 }
 
 (async function boot() {
@@ -945,8 +974,9 @@ function showBackendBanner(message) {
       <div class="panel empty" style="grid-column:1/-1">
         <h3>The storefront is live, the API is not connected yet</h3>
         <p class="muted">GitHub Pages serves static files only, so the Spring Boot backend runs elsewhere.</p>
-        <p class="muted">Deploy it (the repo has a <code>Dockerfile</code> and a <code>render.yaml</code>), then put its
-        URL in <code>docs/config.js</code> as <code>apiBase</code> and reload this page.</p>
+        <p class="muted">Paste your backend URL in the box above (or add <code>?api=https://your-backend</code>
+        to this page's address) and the shop loads. To make it permanent for everyone, set
+        <code>apiBase</code> in <code>docs/config.js</code>.</p>
       </div>`;
     return;
   }
