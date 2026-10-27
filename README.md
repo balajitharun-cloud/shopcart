@@ -238,6 +238,25 @@ docker run -p 8080:8080 -e APP_CORS_ALLOWED_ORIGINS=https://<user>.github.io sho
 | `SPRING_DATASOURCE_URL` | `jdbc:h2:file:./data/shopcart` | database JDBC URL |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `sa` / empty | database credentials |
 
+## Troubleshooting
+
+Run the doctor before guessing - it checks the toolchain, the port and the build, then starts the API:
+
+```bash
+bash doctor.sh            # diagnose + run on http://localhost:8080
+PORT=8090 bash doctor.sh  # if 8080 is taken
+```
+
+It prints one `[ok]`/`[FAIL]` line per check and a verdict, so the failing step is obvious.
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `mvn: command not found` | no JDK/Maven in the container | open the project in the devcontainer (`.devcontainer/devcontainer.json` ships Java 17 + Maven); in Codespaces run *Rebuild Container* |
+| `Port 8080 was already in use` | another process owns the port | `PORT=8090 bash doctor.sh` |
+| `java 17 or newer is required` | older JDK | install JDK 17+ or use the devcontainer |
+| started, but the browser shows nothing | wrong URL | open exactly the URL the log prints; in Codespaces use the **Ports** tab link, not `localhost` |
+| `Cannot reach the API` on the Pages site | backend not public / asleep / wrong URL | make the forwarded port **Public** (Codespaces) or wake the Render service, then reload |
+
 ## Running the tests
 
 ```bash
