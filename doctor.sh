@@ -51,12 +51,30 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 
-# 4. Is the port free?
+# 4. Is the port free - or is ShopCart already running on it?
 if (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null; then
   exec 3>&- 2>/dev/null
-  bad "port ${PORT} is already in use. Try: PORT=8090 bash doctor.sh"
+  if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/api/config" 2>/dev/null | grep -q 'taxRate'; then
+    ok "ShopCart is ALREADY running at http://localhost:${PORT}"
+    echo
+    echo "Verdict: nothing to start. Open http://localhost:${PORT} in your browser."
+    echo "         To restart it, stop the other process first - see README > Troubleshooting."
+    exit 0
+  fi
+  echo
+  bad "port ${PORT} is held by another program (not ShopCart)."
+  echo
+  echo "Verdict: free the port, or run on a different one:  PORT=8090 bash doctor.sh"
+  echo "  find it:  lsof -i :${PORT}     (macOS/Linux)   |   netstat -ano | findstr :${PORT}   (Windows)"
+  exit 1
 else
   ok "port ${PORT} is free"
+fi
+
+# 4b. Is another run holding the database file?
+if [ -f "data/shopcart.mv.db" ] && [ -f "data/shopcart.lock.db" ]; then
+  info "data/shopcart.lock.db exists - a previous run may still be alive."
+  info "If startup fails with 'Database may be already in use', stop that process first."
 fi
 
 # 5. Build

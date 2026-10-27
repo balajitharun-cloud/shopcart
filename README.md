@@ -256,6 +256,23 @@ It prints one `[ok]`/`[FAIL]` line per check and a verdict, so the failing step 
 | `java 17 or newer is required` | older JDK | install JDK 17+ or use the devcontainer |
 | started, but the browser shows nothing | wrong URL | open exactly the URL the log prints; in Codespaces use the **Ports** tab link, not `localhost` |
 | `Cannot reach the API` on the Pages site | backend not public / asleep / wrong URL | make the forwarded port **Public** (Codespaces) or wake the Render service, then reload |
+| `Database may be already in use: ".../data/shopcart.mv.db"` | a previous run is still alive and holds the H2 file | stop it (below), then start once - or use a separate database: `--spring.datasource.url=jdbc:h2:file:./data/shopcart2` |
+| a wall of errors after running the command twice | the first instance still owns port 8080 and the database file | `bash doctor.sh` tells you it is already running; stop the old one first |
+
+### Stopping a run
+
+One instance only - the H2 database is a single-writer file.
+
+```bash
+# macOS / Linux
+pkill -f shopcart-1.0.0.jar      # or: Ctrl+C in the terminal running it
+lsof -i :8080                    # see what still holds the port
+rm -f data/shopcart.lock.db      # only after the process is gone
+
+# Windows
+netstat -ano | findstr :8080
+taskkill /PID <pid> /F
+```
 
 ## Running the tests
 
