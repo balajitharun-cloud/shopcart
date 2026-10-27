@@ -15,7 +15,9 @@ const API_OVERRIDE =
   new URLSearchParams(location.search).get("api") ||
   localStorage.getItem("shopcart.apiBase") ||
   "";
-const API_BASE = String(CONFIG.apiBase || API_OVERRIDE || "").replace(/\/+$/, "");
+/* An explicit choice (?api= or the connect box) must beat the value baked into config.js,
+   otherwise the box would look like it does nothing. */
+const API_BASE = String(API_OVERRIDE || CONFIG.apiBase || "").replace(/\/+$/, "");
 /* True when this page is served by a static host (GitHub Pages) rather than by Spring Boot. */
 const STATIC_HOST = CONFIG.staticHost === true;
 const PAY_LABELS = { CARD: "Card", UPI: "UPI", NET_BANKING: "Net Banking", COD: "Cash on Delivery" };
@@ -241,6 +243,10 @@ async function loadCatalogue() {
     await loadProducts();
   } catch (error) {
     toast(error.message, "error");
+    if (STATIC_HOST) {
+      showBackendBanner("<strong>Could not load the catalogue.</strong> " + esc(error.message) +
+        " Point the storefront at a running backend below.");
+    }
     $("product-count").textContent = "";
     $("shop-empty").hidden = true;
     $("product-grid").innerHTML = `
@@ -935,18 +941,21 @@ async function loadAdminOrders() {
 
 /* ------------------------------ boot ------------------------------ */
 
-function showBackendBanner(message) {
-  const banner = $("backend-banner");
-  banner.innerHTML =
-    "<div>" + message + "</div>" +
-    `<div class="banner-form">
-       <input id="api-url" type="url" placeholder="https://your-backend.onrender.com" />
-       <button class="btn btn-primary btn-sm" id="api-connect">Connect</button>
-     </div>`;
-  banner.hidden = false;
+function connectBoxHtml() {
+  const saved = localStorage.getItem("shopcart.apiBase");
+  return `<div class="banner-form">
+      <input id="api-url" type="url" placeholder="https://your-backend.onrender.com"
+             value="${esc(API_BASE)}" />
+      <button class="btn btn-primary btn-sm" id="api-connect">Connect</button>
+      ${saved ? '<button class="btn btn-ghost btn-sm" id="api-reset">Use deployed default</button>' : ""}
+    </div>`;
+}
 
+function wireConnectBox() {
+  const input = $("api-url");
+  if (!input) return;
   const connect = () => {
-    const value = $("api-url").value.trim().replace(/\/+$/, "");
+    const value = input.value.trim().replace(/\/+$/, "");
     if (!/^https?:\/\//.test(value)) {
       toast("Enter a full URL starting with https://", "error");
       return;
@@ -955,13 +964,36 @@ function showBackendBanner(message) {
     location.reload();
   };
   $("api-connect").addEventListener("click", connect);
-  $("api-url").addEventListener("keydown", (event) => {
+  input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") { event.preventDefault(); connect(); }
   });
+  const reset = $("api-reset");
+  if (reset) {
+    reset.addEventListener("click", () => {
+      localStorage.removeItem("shopcart.apiBase");
+      location.reload();
+    });
+  }
+}
+
+function showBackendBanner(message) {
+  const banner = $("backend-banner");
+  banner.innerHTML = "<div>" + message + "</div>" + connectBoxHtml();
+  banner.hidden = false;
+  wireConnectBox();
 }
 
 (async function boot() {
   renderSession();
+
+  if (STATIC_HOST) {
+    const settings = $("api-settings");
+    settings.hidden = false;
+    settings.addEventListener("click", () => {
+      showBackendBanner("<strong>Backend URL.</strong> Currently using " +
+        (API_BASE ? "<code>" + esc(API_BASE) + "</code>" : "same origin (nothing configured)") + ".");
+    });
+  }
 
   if (STATIC_HOST && !API_BASE) {
     showBackendBanner(
