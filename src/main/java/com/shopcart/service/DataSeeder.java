@@ -10,7 +10,7 @@ import com.shopcart.repo.ProductRepository;
 import com.shopcart.repo.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
-/** Seeds demo catalogue, accounts and coupons on first run so the shop is usable immediately. */
+/**
+ * Seeds demo catalogue, accounts and coupons on first run so the shop is usable immediately.
+ *
+ * <p>Runs as a {@link SmartInitializingSingleton} rather than a CommandLineRunner: runners execute
+ * after the web server is already accepting traffic, which left a window where the first requests
+ * (very noticeable on a cold-starting host) saw an empty catalogue.</p>
+ */
 @Component
-public class DataSeeder implements CommandLineRunner {
+public class DataSeeder implements SmartInitializingSingleton {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
@@ -41,7 +47,7 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     @Transactional
-    public void run(String... args) {
+    public void afterSingletonsInstantiated() {
         seedUsers();
         seedCatalogue();
         adminService.seedCoupon("WELCOME10", CouponType.PERCENT, new BigDecimal("10"), new BigDecimal("0"));
